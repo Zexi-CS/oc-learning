@@ -58,6 +58,7 @@
 #import "User.h"
 #import "NetworkManager.h"
 #import "UserCell.h"
+#import <Masonry/Masonry.h>
 
 
 @interface UserListViewController () <UITableViewDataSource, UITableViewDelegate>
@@ -168,33 +169,36 @@
     self.progressLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.progressLabel];
 
-    // ─── Auto Layout：用 VFL 布局整页 ───
-    NSDictionary *v = @{
-        @"tableView":      self.tableView,
-        @"downloadButton": self.downloadButton,
-        @"progressView":   self.progressView,
-        @"progressLabel":  self.progressLabel
-    };
+    // ─── Masonry 布局：整页 ───
+    // Masonry 自动关闭 translatesAutoresizingMaskIntoConstraints，不用手写
 
-    // TableView 水平撑满
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[tableView]|"
-                                                                      options:0 metrics:nil views:v]];
-    // TableView 垂直方向从顶部开始
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[tableView]"
-                                                                      options:0 metrics:nil views:v]];
+    // TableView 顶部和左右撑满
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.left.right.equalTo(self.view);
+    }];
 
     // 底部按钮：左右各留 20
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-20-[downloadButton]-20-|"
-                                                                      options:0 metrics:nil views:v]];
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-20-[progressView]-20-|"
-                                                                      options:0 metrics:nil views:v]];
-    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-20-[progressLabel]-20-|"
-                                                                      options:0 metrics:nil views:v]];
+    [self.downloadButton mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(self.view).offset(20);
+        make.right.equalTo(self.view).offset(-20);
+        make.top.equalTo(self.tableView.mas_bottom).offset(10);
+        make.height.mas_equalTo(44);
+    }];
 
-    // 垂直排列：TableView → 按钮(高44) → 进度条 → 进度文字 → 底边距
-    [self.view addConstraints:
-     [NSLayoutConstraint constraintsWithVisualFormat:@"V:[tableView]-10-[downloadButton(44)]-5-[progressView]-2-[progressLabel]-10-|"
-                                            options:0 metrics:nil views:v]];
+    // 进度条
+    [self.progressView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(self.view).offset(20);
+        make.right.equalTo(self.view).offset(-20);
+        make.top.equalTo(self.downloadButton.mas_bottom).offset(5);
+    }];
+
+    // 进度文字
+    [self.progressLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(self.view).offset(20);
+        make.right.equalTo(self.view).offset(-20);
+        make.top.equalTo(self.progressView.mas_bottom).offset(2);
+        make.bottom.equalTo(self.view).offset(-10);
+    }];
 }
 ```
 
@@ -565,6 +569,6 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
 | 25 | UIProgressView                           | 底部进度条                                                   |
 | 26 | UIButton + target-action                 | 下载按钮                                                    |
 | 27 | UINavigationController + UIBarButtonItem | 导航栏 + 右上角"+"按钮                                          |
-| 28 | VFL 布局                                   | 整页布局（TableView + 底部按钮）                                  |
+| -- | Masonry 布局 | 整页布局（TableView + 底部按钮，全部 `mas_makeConstraints:`） |
 
 **下一步预告：** NetworkManager 补充下载方法 + AppDelegate 入口配置。
