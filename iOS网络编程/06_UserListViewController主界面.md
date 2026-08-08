@@ -71,8 +71,6 @@
 // ─── UI 控件 ───
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UIButton *downloadButton;
-@property (nonatomic, strong) UIProgressView *progressView;
-@property (nonatomic, strong) UILabel *progressLabel;
 
 @end
 ```
@@ -134,70 +132,30 @@
     [self.tableView registerClass:[UserCell class]
            forCellReuseIdentifier:kUserCellIdentifier];
 
-    self.tableView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.tableView];
+
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.left.right.equalTo(self.view);
+    }];
 }
 
 // ─── 底部下载区域 ───
 - (void)setupBottomBar {
     // 下载按钮
     self.downloadButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.downloadButton setTitle:@"下载文件（NSURLSessionDownloadTask）"
-                         forState:UIControlStateNormal];
-    self.downloadButton.backgroundColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1.0];
+    [self.downloadButton setTitle:@"下载文件" forState:UIControlStateNormal];
+    self.downloadButton.backgroundColor = [UIColor systemBlueColor];
     [self.downloadButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    self.downloadButton.layer.cornerRadius = 8;  // 圆角
-    self.downloadButton.translatesAutoresizingMaskIntoConstraints = NO;
     [self.downloadButton addTarget:self
                             action:@selector(downloadButtonTapped)
                   forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.downloadButton];
 
-    // 进度条
-    self.progressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
-    self.progressView.progress = 0.0;
-    self.progressView.hidden = YES;  // 默认隐藏，点了下载才显示
-    self.progressView.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.progressView];
-
-    // 进度文字
-    self.progressLabel = [[UILabel alloc] init];
-    self.progressLabel.font = [UIFont systemFontOfSize:12];
-    self.progressLabel.textColor = [UIColor grayColor];
-    self.progressLabel.textAlignment = NSTextAlignmentCenter;
-    self.progressLabel.hidden = YES;
-    self.progressLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.progressLabel];
-
-    // ─── Masonry 布局：整页 ───
-    // Masonry 自动关闭 translatesAutoresizingMaskIntoConstraints，不用手写
-
-    // TableView 顶部和左右撑满
-    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.top.left.right.equalTo(self.view);
-    }];
-
-    // 底部按钮：左右各留 20
     [self.downloadButton mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.left.equalTo(self.view).offset(20);
-        make.right.equalTo(self.view).offset(-20);
+        make.left.right.equalTo(self.view).insets(UIEdgeInsetsMake(0, 20, 0, 20));
         make.top.equalTo(self.tableView.mas_bottom).offset(10);
+        make.bottom.equalTo(self.view).offset(-20);
         make.height.mas_equalTo(44);
-    }];
-
-    // 进度条
-    [self.progressView mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.left.equalTo(self.view).offset(20);
-        make.right.equalTo(self.view).offset(-20);
-        make.top.equalTo(self.downloadButton.mas_bottom).offset(5);
-    }];
-
-    // 进度文字
-    [self.progressLabel mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.left.equalTo(self.view).offset(20);
-        make.right.equalTo(self.view).offset(-20);
-        make.top.equalTo(self.progressView.mas_bottom).offset(2);
-        make.bottom.equalTo(self.view).offset(-10);
     }];
 }
 ```
@@ -451,42 +409,19 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
 #pragma mark - 文件下载
 
 - (void)downloadButtonTapped {
-    // 要下载的图片地址
     NSString *urlString = @"https://quan.duoyioa.com/upload/image/20190927/origin5351595200009b00009b523e23e72ce7.png";
-
-    // 显示进度条
-    self.progressView.hidden = NO;
-    self.progressLabel.hidden = NO;
-    self.progressView.progress = 0.0;
-    self.progressLabel.text = @"进度：0%";
-
-    // 下载期间按钮不可点（防重复点击）
-    self.downloadButton.enabled = NO;
-    self.downloadButton.alpha = 0.6;
-    [self.downloadButton setTitle:@"正在下载..." forState:UIControlStateNormal];
 
     [[NetworkManager sharedManager] downloadFileFromURL:urlString
         progress:^(double progress) {
-            self.progressView.progress = progress;
-            self.progressLabel.text = [NSString stringWithFormat:@"进度：%.1f%%", progress * 100];
+            NSLog(@"[下载进度] %.1f%%", progress * 100);
         }
         completion:^(BOOL success, NSString *filePath, NSError *error) {
-            self.downloadButton.enabled = YES;
-            self.downloadButton.alpha = 1.0;
-            [self.downloadButton setTitle:@"下载文件（NSURLSessionDownloadTask）" forState:UIControlStateNormal];
-
             if (success) {
-                [self showAlert:@"下载完成"
-                        message:[NSString stringWithFormat:@"文件已保存到：\n%@", filePath]];
+                NSLog(@"[下载完成] 文件路径：%@", filePath);
             } else {
-                [self showAlert:@"下载失败" message:error.localizedDescription];
-                self.progressLabel.text = @"下载失败";
-                self.progressLabel.textColor = [UIColor redColor];
+                NSLog(@"[下载失败] %@", error.localizedDescription);
             }
         }];
-
-    // ⚠️ 注意：downloadFileFromURL: 这个方法 NetworkManager 里还没写！
-    // 这是下一步的内容，暂时先占位，写了 NetworkManager 下载部分就能调通
 }
 ```
 
