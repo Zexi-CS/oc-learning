@@ -471,3 +471,188 @@ UIImage 不在此列——继承 NSObject，是数据模型，不是视图。
 | 3 | `.center` 快捷写法？ | centerX+centerY |
 | 4 | `.insets` 什么时候用？ | 四边距 |
 | 5 | Masonry 约束是立即执行还是等回调？ | 立即执行（不等系统） |
+
+---
+
+## 七、任务 3 — 300 子线程 + 三种锁
+
+### 题目要求
+
+在 300 个子线程中，将 UIImage 转成 NSData，打印线程编号 + 图片体积（KB，两位小数），并将字符串加到可变数组。最后在主线程打印数组。分别用 `@synchronized`、`NSLock`、`dispatch_semaphore_t` 实现。
+
+### 7.1 为什么需要锁
+
+300 个线程同时往一个 `NSMutableArray` 里 `addObject:` 会导致数据覆盖或崩溃。`addObject:` 不是原子操作——内部"读长度→扩内存→写元素→更新长度"可能被多个线程同时打断。锁保证同一时刻只有一个人在操作数组。
+
+### 7.2 方案一：`@synchronized`
+
+```objc
+- (void)runSynchronizedDemo {
+    UIImage *image = [UIImage imageNamed:@"test"];
+    NSMutableArray *results = [NSMutableArray array];
+    dispatch_group_t group = dispatch_group_create();
+
+    for (int i = 0; i < 300; i++) {
+        dispatch_group_async(group, dispatch_get_global_queue(0, 0), ^{
+            NSData *data = UIImageJPEGRepresentation(image, 1.0);
+            double sizeKB = data.length / 1024.0;
+            NSString *str = [NSString stringWithFormat:@"线程%d：%.2fKB", i + 1, sizeKB];
+
+            @synchronized(results) {
+                [results addObject:str];
+            }
+        });
+    }
+
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+        for (NSString *s in results) { NSLog(@"%@", s); }
+        NSLog(@"总计 %lu 条", (unsigned long)results.count);
+    });
+}
+```
+
+### 7.3 方案二：`NSLock`
+
+和 `@synchronized` 一样的效果，但需要手动 `lock`/`unlock`。忘记 `unlock` 会导致死锁。
+
+```objc
+NSLock *lock = [[NSLock alloc] init];
+// Block 里：
+[lock lock];
+[results addObject:str];
+[lock unlock];
+```
+
+### 7.4 方案三：`dispatch_semaphore_t`（信号量）
+
+信号量内部维护一个计数器。`create(1)` 设初始值为 1，`wait` 减 1（为 0 时后来者等待），`signal` 加 1（唤醒等待者）。
+
+```objc
+dispatch_semaphore_t sem = dispatch_semaphore_create(1);  // 只允许 1 个线程进入
+// Block 里：
+dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+[results addObject:str];
+dispatch_semaphore_signal(sem);
+```
+
+信号量不止能做锁——`create(3)` 就可以让 3 个线程同时进入，控制并发数。
+
+### 7.5 三种锁对比
+
+| | @synchronized | NSLock | dispatch_semaphore |
+|------|-------------|--------|-------------------|
+| 写法 | `@synchronized(obj) {}` | `[lock lock]` / `[lock unlock]` | `wait` / `signal` |
+| 解锁 | 自动（出 `}` 即解） | 手动 | 手动 |
+| 风险 | 无 | 忘 unlock 会死锁 | 计数值设错会错乱 |
+| 额外能力 | 无 | 有 tryLock（锁不上就跳过） | 控制并发数（不止 1） |
+
+---
+
+## 八、GCD 体系速查
+
+### 8.1 GCD 是什么
+
+Grand Central Dispatch — 苹果的多线程框架。你只关心"丢什么任务"，不关心"哪个线程跑它"。和 NSThread（手动管理线程生命周期）的对比：GCD 自动分配线程，你只管 Block。
+
+### 8.2 GCD 核心函数族
+
+| 函数 | 作用 | 今天用了吗 |
+|------|------|-----------|
+| `dispatch_async(队列, Block)` | 往队列丢任务，不等结果直接走（异步） | ✅ 网络回调切主线程 |
+| `dispatch_sync(队列, Block)` | 往队列丢任务，干完才走（同步） | ❌ |
+| `dispatch_get_main_queue()` | 获取主线程队列 | ✅ |
+| `dispatch_get_global_queue(0, 0)` | 获取子线程队列（第一个0=优先级，第二个0=保留字段） | ✅ |
+| `dispatch_group_create()` | 建一个任务组 | ✅ |
+| `dispatch_group_async(组, 队列, Block)` | 往组里扔任务（进场+1，出场-1） | ✅ |
+| `dispatch_group_notify(组, 主线程, Block)` | 组里全完成时回调 | ✅ |
+| `dispatch_semaphore_create(n)` | 建信号量（计数器 = n） | ✅ |
+| `dispatch_semaphore_wait(sem, FOREVER)` | 计数器 -1（为 0 则等待） | ✅ |
+| `dispatch_semaphore_signal(sem)` | 计数器 +1 | ✅ |
+| `dispatch_once(&token, Block)` | 只执行一次（单例用） | 上周 NetworkManager |
+
+### 8.3 `dispatch_group` 工作机制
+
+不是 for 循环结束就认为完成——系统在 Block 执行到最后一个 `}` 时自动增减组内计数器。`dispatch_group_notify` 等待计数器归零才执行回调。
+
+### 8.4 异步 vs 同步
+
+| | 异步（async） | 同步（sync） |
+|------|-------------|-----------|
+| 丢完任务后 | 继续往下走，不等结果 | 等着，干完才往下走 |
+| GCD 函数 | `dispatch_async` | `dispatch_sync` |
+| 本周使用 | 全部场景 | 未使用 |
+
+### 8.5 `dispatch_group_t` 为什么没有 `*`
+
+`*` 被藏在 typedef 里——`typedef dispatch_group_s *dispatch_group_t`。类型名自带指针。`dispatch_queue_t`、`dispatch_semaphore_t` 同理。
+
+---
+
+## 九、C 函数 vs OC 方法
+
+### 9.1 区分标准
+
+| 信号 | C 函数 | OC 方法 |
+|------|--------|---------|
+| 调用语法 | `func(a, b)` 小括号 | `[obj method:a]` 方括号 |
+| 有没有对象在前 | 无 | 有（`self`、`dict`、`arr`） |
+| 命名风格 | 驼峰大写开头 | 驼峰小写开头 |
+
+### 9.2 常见 C 函数一览
+
+| C 函数 | 作用 |
+|--------|------|
+| `UIImageJPEGRepresentation(image, 质量)` | UIImage→NSData（JPEG） |
+| `UIImagePNGRepresentation(image)` | UIImage→NSData（PNG） |
+| `CGRectMake(x, y, w, h)` | 创建坐标+尺寸结构体 |
+| `NSLog(@"...")` | 打印日志 |
+| `objc_setAssociatedObject(...)` | 关联对象存值 |
+| `objc_getAssociatedObject(...)` | 关联对象取值 |
+
+### 9.3 常见 NSData 转换方法
+
+| 方法 | 写法 |
+|------|------|
+| 图片→JPEG | `UIImageJPEGRepresentation(image, 1.0)` |
+| 图片→PNG | `UIImagePNGRepresentation(image)` |
+| 本地文件→NSData | `[NSData dataWithContentsOfFile:path]` |
+| 字符串→NSData | `[str dataUsingEncoding:NSUTF8StringEncoding]` |
+| NSData→文件 | `[data writeToFile:path atomically:YES]` |
+| NSData→UIImage | `[UIImage imageWithData:data]` |
+
+---
+
+## 十、问答索引（任务 3）
+
+### 10.1 锁相关
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | 为什么要加锁？300 个线程怎么冲突的？ | `addObject:` 非原子操作，多线程覆盖 |
+| 2 | `@synchronized` 和 `NSLock` 效果一样吗？ | 完全一样，只是写法不同 |
+| 3 | 数组顺序是 1→2→3 吗？ | 不是——谁先跑到锁谁先进，顺序随机 |
+| 4 | `[lock lock]` / `[lock unlock]` 是怎么把中间锁住的？ | 门闩逻辑——lock 闩门，unlock 开门 |
+| 5 | 信号量的 `wait` 是 "先放行再减" 还是 "先减再放行"？ | 先看计数器，有证就减并放行，没证就等 |
+
+### 10.2 GCD 相关
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | GCD 是什么？ | 苹果多线程框架，你丢任务它分配线程 |
+| 2 | `dispatch_group_create()` 是固定写法吗？ | 固定模板：建组→丢任务→等通知 |
+| 3 | `dispatch_get_global_queue(0, 0)` 两个 0 什么意思？ | 第一个=优先级，第二个=保留字段 |
+| 4 | 系统怎么知道组里任务跑完了？ | Block 进出自动增减内部计数器 |
+| 5 | 为什么子线程用 `group_async`，主线程用 `group_notify`？ | async=丢任务干活，notify=等通知 |
+| 6 | 异步（async）和同步（sync）的区别？ | async 不等结果，sync 等 |
+| 7 | `dispatch_group_t` 为什么没有 `*`？ | typedef 把 `*` 藏在类型名里 |
+| 8 | `DISPATCH_TIME_FOREVER` 是什么？ | 常量 = 永远等，等不到信号就不走 |
+| 9 | GCD 还能建什么？ | group、semaphore、自定义 queue、timer 等 |
+
+### 10.3 C 函数 / 数据转换
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | `UIImageJPEGRepresentation` 为什么不用方括号？ | C 函数，不属于任何类 |
+| 2 | `1.0` 参数什么意思？ | JPEG 压缩质量 0.0~1.0 |
+| 3 | 有哪些文件格式转 NSData 的方法？ | JPEG/PNG/文件/字符串/JSON 全部可转 |
+| 4 | 怎么判断用 C 函数还是 OC 方法？ | 看小括号还是方括号 |
