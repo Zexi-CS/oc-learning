@@ -656,3 +656,273 @@ Grand Central Dispatch — 苹果的多线程框架。你只关心"丢什么任�
 | 2 | `1.0` 参数什么意思？ | JPEG 压缩质量 0.0~1.0 |
 | 3 | 有哪些文件格式转 NSData 的方法？ | JPEG/PNG/文件/字符串/JSON 全部可转 |
 | 4 | 怎么判断用 C 函数还是 OC 方法？ | 看小括号还是方括号 |
+
+---
+
+## 十一、任务 4：图片下载进度列表（完整详解）
+
+### 11.1 题目要求
+
+使用 SDWebImage 下载 7 张网络图片，UITableView 列表每行显示图片 + 进度文字（已下载KB_总KB_百分比）。使用任务 1 拼接 + 任务 2 分类显示。需考虑滚动流畅性。
+
+### 11.2 项目结构
+
+```
+├── Categories/
+│   ├── NSString+Concatenation.h/.m   ← 任务 1
+│   └── UIView+Display.h/.m           ← 任务 2
+├── Model/
+│   └── ImageItem.h/.m
+├── View/
+│   └── ImageCell.h/.m
+└── Controller/
+    └── ImageListViewController.h/.m
+```
+
+### 11.3 ImageItem — 数据模型
+
+每个 ImageItem 存一张图片的 URL 和序号。`defaultItems` 返回 7 个 ImageItem 组成的数据源数组。
+
+### 11.4 ImageCell — 自定义 Cell
+
+**布局：** 左侧 80×80 正方形图片 + 右侧垂直居中进度文字。
+
+**核心方法链：**
+1. `setupSubviews` → 创建 imageArea（UIView，走任务 2 分类）+ textArea（UIView，走任务 2 分类）
+2. `configureWithItem:` → SDWebImage 下载 + progress 回调更新 textArea.text + completed 回调设 imageArea.image
+3. `prepareForReuse` → 取消旧下载 + 清空图片和文字
+
+### 11.5 问答
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | ImageItem 是干什么用的？ | 存 URL+序号，TableView 的数据源 |
+| 2 | `sd_setImageWithURL:` 从哪来的？ | SDWebImage 给 UIImageView 写的分类方法 |
+| 3 | `displayImageView` 为什么必须要绕一层？ | 分类版 UIView 不是 UIImageView，必须取出内部打工仔 |
+| 4 | `options:SDWebImageAvoidAutoSetImage` 干什么？ | 别自动设图——只在 100% 下载完手动设 |
+| 5 | `placeholderImage:nil` 在哪显示？ | 在 UIImageView 上，但加了 AvoidAutoSet 后不生效 |
+| 6 | progress/completed 两个 Block 怎么触发的？ | SDWebImage 内部自动调，你只写不调 |
+| 7 | `contentView` 是什么，为什么加它上面？ | Cell 的内容容器，系统编辑/拖拽模式依赖它 |
+| 8 | `rowHeight` 为什么不叫 cellHeight？ | TableView 里 row = 行，行高是行的属性 |
+| 9 | `separatorStyle = None` 干什么？ | 关掉每行之间的灰色分割线 |
+| 10 | `registerClass:` + `dequeue` Cell 在哪创建的？ | dequeue 内部第一次调时自动 `alloc init` |
+| 11 | `cellForRowAtIndexPath:` 里 `self` 是谁？ | self = 当前这个 Cell，修改完直接 return |
+| 12 | 第二次运行文字消失？ | 缓存命中 progress 不触发，completed 里补兜底文字 |
+| 13 | 为什么 `textArea.text` 不直接用 UILabel？ | 题目要求用任务 2 的分类显示文字 |
+| 14 | 分类的 text 固定位置怎么办？ | 改分类里 displayTextLabel 约束为居中 |
+| 15 | 继承版和分类版核心区别？ | 继承版直接 `@property UIImageView`，不绕 displayImageView |
+
+---
+
+## 十二、补充知识点
+
+### 12.1 `__block` 的作用
+
+Block 内部默认不能修改外部变量。`__block` 允许跨 Block 写入——但 progress 回调里直接用参数 received/expected 就够了，不需要外部变量。
+
+### 12.2 `[items copy]` 为什么
+
+NSMutableArray → copy → NSArray（不可变）。防止外部拿到数组后 `addObject` 或 `removeObject` 篡改数据源。
+
+### 12.3 `cellForRowAtIndexPath:` 无返回值的逻辑
+
+Cell 调自己的 `configureWithItem:`，方法里 `self.progressLabel.text = xxx` 直接改了 Cell 自己的控件——方法结束时 Cell 已变，不需要 return 新对象。
+
+### 12.4 Storyboard 加载自定义 ViewController
+
+选中 Storyboard 中的 ViewController → Identity Inspector → Class 改名 → 系统自动 `init` 你的类，不需要手动写 SceneDelegate。
+
+---
+
+## 十三、分类版深入问答（2026-08-12 补充）
+
+### 13.1 内存与指针
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | 数组中存的是数据还是指针？ | 存的是指向对象的指针，不是对象本体的拷贝 |
+| 2 | 每次 for 循环 `alloc init` 不会覆盖前一个对象吗？ | 不会——变量 item 换了指向，但旧对象已被数组持有，不会释放 |
+| 3 | 删掉 `addObject` 结果是什么？ | 循环结束时只剩最后一个对象，前 6 个被 ARC 释放 |
+| 4 | 为什么下载逻辑放 Cell 里不放 Item 里？ | Item 是纯数据模型，不碰 UI；Cell 管展示，下载最靠近视图 |
+| 5 | `configureWithItem:` 传的是整个对象还是只传 URL？ | 传整个 ImageItem，内部只用 imageURL 属性 |
+
+### 13.2 启动流程与生命周期
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | 程序先从哪个类开始执行？ | ImageListViewController → viewDidLoad → setupTableView |
+| 2 | viewDidLoad 的含义？ | 视图已加载到内存，可以安全添加子视图 |
+| 3 | viewDidLoad 里代码顺序能乱吗？ | 数据源必须在 setupTableView 之前；其余颜色标题可互换 |
+
+### 13.3 Cell 机制
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | `registerClass:` 的钥匙起什么作用？ | 回收池里多种 Cell 靠不同钥匙区分类型 |
+| 2 | `kCellID` 为什么写 ViewController 里不写 Cell 里？ | 注册和取 Cell 都在 ViewController 里，谁用谁声明 |
+| 3 | `prepareForReuse` 谁调的？ | TableView 在 Cell 即将回收时自动调用 |
+| 4 | 不管什么任务 Cell 都要写 prepareForReuse 吗？ | 只有异步任务（下载、定时器）才需要 |
+| 5 | 自定义 Cell 必须重写 initWithStyle: 吗？ | 是——dequeue 内部调的就是它，不写 setupSubviews 不执行 |
+
+### 13.4 分类调用链
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | `.text` 怎么找到分类方法的？ | `#import "UIView+Display.h"` 加载分类后所有 UIView 都可用 |
+| 2 | `.text` 是系统方法还是我们写的？ | UIView 原生没有 `.text`，是我们手写的 |
+| 3 | 为什么写 `setText:` 调用时写 `.text`？ | 编译器翻译：`.text = xxx` → `[obj setText:xxx]` |
+| 4 | 普通类和分类的 @property 有什么区别？ | 普通类自动生成 _ivar + getter/setter；分类只声明，全手写 |
+| 5 | `self.textArea.text` 完整调用链？ | setText: → displayTextLabel getter（懒加载检查）→ UILabel 更新 → 显示 |
+| 6 | `text` 的内容最终在哪个控件上显示？ | 分类内部的 displayTextLabel（UILabel），是 textArea 的子视图 |
+
+### 13.5 第三方库与网络
+
+| 序号 | 问题 | 知识点 |
+|------|------|--------|
+| 1 | SDWebImage 只能下载图片吗？ | 是——专门为图片优化的缓存/解码/渲染全家桶 |
+| 2 | 文档、表格用什么下载？ | NSURLSession / AFNetworking，不需要图片专用库 |
+| 3 | AFNetworking 为什么不能取代 SDWebImage？ | AFNetworking 只管传输，SDWebImage 管图片全生命周期（缓存/解码/GIF） |
+| 4 | 第二次运行文字消失？ | 缓存命中 progress 不触发 → 加 `SDWebImageRefreshCached` 强制重新下载 |
+
+### 13.6 知识点速查
+
+| 知识点 | 内容 |
+|--------|------|
+| `clipsToBounds = YES` | 裁剪超出边界的子视图内容，正方形截图必需 |
+| `separatorStyle = None` | 关闭 TableView 行间灰色分割线 |
+| `initWithFrame:CGRectZero style:` | UITableView 固定初始化器，CGRectZero 被 Masonry 覆盖 |
+| `static NSString * const` | 编译期常量，不可变字符串钥匙 |
+| `|` 位运算合并选项 | `OptionA | OptionB` 同时生效两个枚举值 |
+| C 前缀函数族 | CG = Core Graphics（坐标/尺寸），CF = Core Foundation（底层系统服务） |
+| Masonry 同边省略规则 | `make.left.equalTo(view)` 默认 .mas_left，同边自动补；跨边必须写全 |
+| `.text` vs `.height` 归属 | `.text` = 分类加的，`.height` = UIView 自带 |
+
+---
+
+## 十四、从题目到代码——解题思路模板
+
+### 14.1 拿到题目后的标准流程
+
+```
+步骤 1：拆解题目，提取子需求
+    → 用 highlighter 画出每个独立的动作和约束
+
+步骤 2：把子需求映射到知识点
+    → 用下面的"需求 → 知识点"对照表
+
+步骤 3：排文件结构
+    → 按 MVC：Model → View/Cell → Controller，一层一文件
+
+步骤 4：逐文件填空
+    → 每个文件套固定模板（下面有每类文件的模板）
+
+步骤 5：自检 + 查报错
+    → 对照"自检清单"过一遍，有错查"排查表"
+```
+
+---
+
+### 14.2 "需求 → 知识点" 精确对照表
+
+| 题目里的这句话 | 用到的知识点 | 具体怎么写 |
+|--------------|------------|-----------|
+| "给 NSString 扩展一个分类" | Category + 类方法 | `@interface NSString (XXX)` → 6 个 `+` 方法 → 少参调多参 |
+| "返回值是传入参数拼接的结果" | `NSMutableArray` + `componentsJoinedByString:` | 建数组 → 逐条 `addObject`（判 nil）→ 系统方法一次性拼接 |
+| "用下划线分隔" | `componentsJoinedByString:@"_"` | 系统方法，不在最后加分隔符 |
+| "给 UIView 扩展 image 属性" | Category + `objc_setAssociatedObject` | `@interface UIView (XXX)` → `.h` 声明 `@property` → `.m` 手写 setter/getter |
+| "像 UIImageView 一样显示图片" | 内部创建 UIImageView 子视图 | setter 里拿关联表存的 UIImage → 设到内部 UIImageView 上 |
+| "子视图只创建一次" | 懒加载 getter 模式 | `if (!obj) { obj = alloc init; objc_set; } return obj;` |
+| "考虑性能问题" | 固定行高 / 懒加载 / prepareForReuse | 不做动态行高；用在 if(!iv) 里创建 UILabel/UIImageView；滚出时取消异步任务 |
+| "在 300 个子线程中" | GCD — `dispatch_group_async` | `for` 循环里 `dispatch_group_async(group, global_queue, ^{...})` |
+| "将图片转成 NSData" | C 函数 `UIImageJPEGRepresentation` | `NSData *data = UIImageJPEGRepresentation(image, 1.0);` |
+| "打印体积大小(KB, 两位小数)" | 字节 → KB 转换 + `stringWithFormat` | `received / 1024.0` → `[NSString stringWithFormat:@"%.2fKB", kb]` |
+| "添加到一个可变数组中" | NSMutableArray 的 `addObject:` | 加锁包围这一行避免多线程覆盖 |
+| "分别用 @synchronized/NSLock/semaphore" | 三种锁各自语法 | `@synchronized(arr){}` / `[lock lock];...;[lock unlock]` / `sem_wait;...;sem_signal` |
+| "在主线程打印数组内容" | `dispatch_group_notify` + 主线程 | `dispatch_group_notify(group, dispatch_get_main_queue(), ^{ NSLog(...); })` |
+| "使用 SDWebImage 从网络请求图片" | CocoaPods + `sd_setImageWithURL:` | `pod 'SDWebImage'` → `[iv sd_setImageWithURL:url ...]` |
+| "实时显示已下载体积、总体积、百分比" | `progress` Block 的三个参数 | `received`(已下)/`expected`(总量) → 算 KB/百分比 → 拼文字 |
+| "用下划线分隔，使用第 1 题的分类" | `#import + concat3` | `[NSString concat3:a _:b __:c]` |
+| "使用 UITableView 并封装 Cell" | TableView 全套模板 | `registerClass:` → DataSource 协议 → `cellForRow` → `dequeue` |
+| "图片和文字控件用第 2 题的分类" | `UIView+Display` 的 `.image` / `.text` | `self.imageArea.image = img; self.textArea.text = str;` |
+| "考虑加载过程中列表滚动的流畅性" | 固定行高 + `prepareForReuse` | `self.tableView.rowHeight = [ImageCell cellHeight];` + 取消下载 |
+| "要求独立完整的工程" | Storyboard 改 Class 或 SceneDelegate 设根 | Identity Inspector 里 Class 改成你的 ViewController |
+
+---
+
+### 14.3 每种文件的"填空模板"
+
+**模型文件（XXItem.h/.m）**
+```objc
+// .h
+@interface XXItem : NSObject
+@property (nonatomic, copy) NSString *xxx;      // 数据属性
++ (NSArray<XXItem *> *)defaultItems;             // 工厂方法返回数据源
+@end
+
+// .m
++ (NSArray *)defaultItems {
+    // ① 准备原始数据（数组、字典、URL 列表）
+    // ② for 循环创建对象 → 设属性 → [items addObject:item]
+    // ③ return [items copy];（防外部修改）
+}
+```
+
+**Cell 文件（XXCell.h/.m）**
+```objc
+// .h
+@interface XXCell : UITableViewCell
++ (CGFloat)cellHeight;
+- (void)configureWithItem:(XXItem *)item;
+@end
+
+// .m
+// ① @interface() 声明内部子视图属性（UIImageView/UILabel/UIView）
+// ② init 里 setupSubviews（alloc init → 设属性 → addSubview → Masonry）
+// ③ configureWithItem: 里拿到数据 → 更新子视图内容
+// ④ 有异步任务就写 prepareForReuse 清理
+```
+
+**ViewController 文件**
+```objj
+// ① @interface() 声明 tableView 和 items 数组
+// ② viewDidLoad：数据源 → setupTableView
+// ③ setupTableView：alloc init → dataSource/delegate=self → registerClass → Masonry
+// ④ numberOfRows → return self.items.count
+// ⑤ cellForRow → dequeue → configureWithItem: → return cell
+```
+
+---
+
+### 14.4 自检清单（写完代码后逐条对）
+
+| 检查项 | 如果忘了会怎样 |
+|--------|-------------|
+| `[super viewDidLoad]` 是第一行吗？ | 视图可能未初始化，控件显示异常 |
+| `dataSource = self` 和 `delegate = self` 写了吗？ | TableView 不回调任何方法，白屏 |
+| `registerClass:` 写了吗？ | `dequeue` 拿不到 Cell，崩溃 |
+| Cell 的 `reuseIdentifier` 和钥匙一致吗？ | 钥匙对不上，崩溃 |
+| 所有子视图 `addSubview` 了吗？ | 创建了但没挂到屏幕上，白屏 |
+| Masonry 约束齐全吗（至少定位置 + 尺寸）？ | 视图不出现在屏幕上或尺寸为 0 |
+| 数据源在 `setupTableView` 之前赋值了吗？ | `numberOfRows` 返回 0，页面空 |
+| SDWebImage 的 `progress` 里切主线程了吗？ | 子线程更新 UI，随机崩溃 |
+| `prepareForReuse` 取消下载了吗？ | 滚动时 Cell 出现别人的图和文字 |
+| 数组 `return [items copy]` 了吗？ | 外部可能 `addObject` 篡改数据源 |
+| `@synchronized(obj)` 的 obj 和操作的数组是同一个吗？ | 锁了个空对象，不加锁，多线程崩溃 |
+| `__block` 只在必要时加了吗？ | 不需要加加了没事，需要加没加会编译报错 |
+
+---
+
+### 14.5 问题排查速查表
+
+| 现象 | 最可能的原因 | 第一动作 |
+|------|------------|---------|
+| 整个屏幕白屏 | `numberOfRows` 返回 0 / TableView 没加到父视图 | 检查 items 赋值是否在 setupTableView 之前 |
+| 图片不显示 | `contentMode` 没设 / UIImageView 是 hidden / image 是 nil | 设 `ScaleAspectFill` + `hidden = NO`；打印 image 确认非 nil |
+| 文字不显示 | 字色和背景同色 / 忘了 `addSubview` / 约束位置在屏幕外 | 设红色字测试；确认 addSubview 已执行 |
+| 滚动时图片乱窜 | `prepareForReuse` 没清理旧图 | 加 `self.xxx.image = nil` + 取消下载 |
+| 第二次运行进度文字消失 | SDWebImage 走缓存，progress 不触发 | `SDWebImageRefreshCached` |
+| 分类方法崩了 / 编译报错代码 | 忘了 `#import "UIView+Display.h"` 或 `#import <objc/runtime.h>` | 补上 import |
+| Masonry 约束报错 | offset 方向搞反了 | 左右：正外推负内收；上下：正下推负上收 |
+| 多线程 Array 崩溃 | 没加锁 | 拿 `@synchronized` 包住所有 `addObject:` |
+| `dispatch_group_notify` 不触发 | 任务没丢进组里（用了 `dispatch_async` 而非 `dispatch_group_async`） | 改成 `dispatch_group_async` |
+

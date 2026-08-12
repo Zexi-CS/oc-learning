@@ -167,9 +167,9 @@ static const void *kTextLabelKey  = &kTextLabelKey;
         lb.hidden = YES;
         [self addSubview:lb];
 
-        // Masonry：底部左右撑满，高 30
+        // Masonry：垂直居中，高 30
         [lb mas_makeConstraints:^(MASConstraintMaker *make) {
-            make.left.right.bottom.equalTo(self);
+            make.center.equalTo(self);
             make.height.mas_equalTo(30);
         }];
 
