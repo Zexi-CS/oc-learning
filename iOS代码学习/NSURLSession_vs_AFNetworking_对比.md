@@ -9,7 +9,7 @@
 
 | | 原生 NSURLSession | AFNetworking |
 |------|------------------|-------------|
-| 代码行数 | **~45 行** | **~6 行** |
+| 代码行数 | **~45 行** | **~19 行** |
 
 ```objc
 // ─── 原生：45 行 ───
@@ -62,29 +62,49 @@
 ```
 
 ```objc
-// ─── AFNetworking：6 行 ───
+// ─── AFNetworking：~22 行 ───
 
 - (void)fetchUsersWithCompletion:(NetworkCompletionBlock)completion {
     NSString *url = [NSString stringWithFormat:@"%@/user/users", kBaseURL];
 
-    [[AFHTTPSessionManager manager] GET:url parameters:nil
-        success:^(NSURLSessionDataTask *task, id response) {
-            // response 已经是解析好的 NSDictionary，在主线程
-            NSArray *arr = [User usersFromArray:response[@"data"]];
-            if (completion) completion(YES, arr, nil);
+    [[AFHTTPSessionManager manager] GET:url
+                             parameters:nil
+                                headers:nil            // ← 4.x 必须有，不要自定义头就传 nil
+                               progress:nil            // ← 下载进度，不要就传 nil
+                                success:^(NSURLSessionDataTask *task, id response) {
+        // response 已经是解析好的 NSDictionary，在主线程
+
+        // ★ 业务 code 校验 —— AFNetworking 不自动做，必须自己写
+        NSInteger code = [response[@"code"] integerValue];
+        if (code != 200) {
+            NSString *msg = response[@"message"] ?: @"未知错误";
+            NSError *bizErr = [NSError errorWithDomain:@"Network" code:code
+                                              userInfo:@{NSLocalizedDescriptionKey: msg}];
+            if (completion) completion(NO, nil, bizErr);
+            return;
         }
-        failure:^(NSURLSessionDataTask *task, NSError *error) {
-            if (completion) completion(NO, nil, error);
-        }];
+
+        NSArray *arr = [User usersFromArray:response[@"data"]];
+        if (completion) completion(YES, arr, nil);
+    }
+                                failure:^(NSURLSessionDataTask *task, NSError *error) {
+        // 网络层错误（连不上、超时、404 等）
+        if (completion) completion(NO, nil, error);
+    }];
 }
 ```
+
+> ⚠️ **参数顺序固定**：`url → parameters → headers → progress → success → failure`，一个不能漏，不要的传 `nil` 占位。AFNetworking 4.x 比 3.x 多了 `headers` 参数，照上面写。
 
 **AFNetworking 自动帮你做了：**
 - 创建 NSURLSession（`[AFHTTPSessionManager manager]` 内部自带）
 - 建 NSMutableURLRequest
 - JSON 反序列化（response 已经是字典）
-- 四层错误检查和归并
+- 网络层错误检查（error、空 data、JSON 解析失败 → 归并进 failure）
 - 切回主线程（success/failure 回调默认在主线程）
+
+**AFNetworking 不帮你做的（必须自己写）：**
+- 业务 `code` 字段校验 —— AFNetworking 只判断 HTTP 状态码（404/500），不知道你服务器 JSON 里 `code` 字段的含义，所以 `code != 200` 的判断要自己补
 
 ---
 
@@ -129,20 +149,31 @@
 ```
 
 ```objc
-// ─── AFNetworking：8 行 ───
+// ─── AFNetworking：~16 行 ───
 
 - (void)addUserWithName:(NSString *)name age:(NSString *)age
              completion:(NetworkCompletionBlock)completion {
     NSString *url = [NSString stringWithFormat:@"%@/user/save", kBaseURL];
     NSDictionary *params = @{@"name": name ?: @"", @"age": age ?: @""};
 
-    [[AFHTTPSessionManager manager] POST:url parameters:params
-        success:^(NSURLSessionDataTask *task, id response) {
-            if (completion) completion(YES, response, nil);
+    [[AFHTTPSessionManager manager] POST:url
+                              parameters:params
+                                 headers:nil            // ← 4.x 必须有
+                                progress:nil            // ← 上传进度，不要就传 nil
+                                 success:^(NSURLSessionDataTask *task, id response) {
+        NSInteger code = [response[@"code"] integerValue];
+        if (code != 200) {
+            NSString *msg = response[@"message"] ?: @"未知错误";
+            NSError *bizErr = [NSError errorWithDomain:@"Network" code:code
+                                              userInfo:@{NSLocalizedDescriptionKey: msg}];
+            if (completion) completion(NO, nil, bizErr);
+            return;
         }
-        failure:^(NSURLSessionDataTask *task, NSError *error) {
-            if (completion) completion(NO, nil, error);
-        }];
+        if (completion) completion(YES, response, nil);
+    }
+                                 failure:^(NSURLSessionDataTask *task, NSError *error) {
+        if (completion) completion(NO, nil, error);
+    }];
 }
 ```
 
@@ -176,20 +207,31 @@
 ```
 
 ```objc
-// ─── AFNetworking：6 行 ───
+// ─── AFNetworking：~16 行 ───
 
 - (void)updateUserWithId:(NSString *)userId name:(NSString *)name age:(NSString *)age
               completion:(NetworkCompletionBlock)completion {
     NSString *url = [NSString stringWithFormat:@"%@/user/update", kBaseURL];
     NSDictionary *params = @{@"id": userId, @"name": name, @"age": age};
 
-    [[AFHTTPSessionManager manager] GET:url parameters:params
-        success:^(NSURLSessionDataTask *task, id response) {
-            if (completion) completion(YES, response, nil);
+    [[AFHTTPSessionManager manager] GET:url
+                             parameters:params
+                                headers:nil
+                               progress:nil
+                                success:^(NSURLSessionDataTask *task, id response) {
+        NSInteger code = [response[@"code"] integerValue];
+        if (code != 200) {
+            NSString *msg = response[@"message"] ?: @"未知错误";
+            NSError *bizErr = [NSError errorWithDomain:@"Network" code:code
+                                              userInfo:@{NSLocalizedDescriptionKey: msg}];
+            if (completion) completion(NO, nil, bizErr);
+            return;
         }
-        failure:^(NSURLSessionDataTask *task, NSError *error) {
-            if (completion) completion(NO, nil, error);
-        }];
+        if (completion) completion(YES, response, nil);
+    }
+                                failure:^(NSURLSessionDataTask *task, NSError *error) {
+        if (completion) completion(NO, nil, error);
+    }];
 }
 ```
 
@@ -216,19 +258,29 @@
 ```
 
 ```objc
-// ─── AFNetworking：5 行 ───
+// ─── AFNetworking：~14 行 ───
 
 - (void)deleteUserWithId:(NSString *)userId completion:(NetworkCompletionBlock)completion {
     NSString *url = [NSString stringWithFormat:@"%@/user/delete", kBaseURL];
     NSDictionary *params = @{@"id": userId};
 
-    [[AFHTTPSessionManager manager] DELETE:url parameters:params
-        success:^(NSURLSessionDataTask *task, id response) {
-            if (completion) completion(YES, response, nil);
+    [[AFHTTPSessionManager manager] DELETE:url
+                                parameters:params
+                                   headers:nil            // ← DELETE 没有 progress，直接到 success
+                                   success:^(NSURLSessionDataTask *task, id response) {
+        NSInteger code = [response[@"code"] integerValue];
+        if (code != 200) {
+            NSString *msg = response[@"message"] ?: @"未知错误";
+            NSError *bizErr = [NSError errorWithDomain:@"Network" code:code
+                                              userInfo:@{NSLocalizedDescriptionKey: msg}];
+            if (completion) completion(NO, nil, bizErr);
+            return;
         }
-        failure:^(NSURLSessionDataTask *task, NSError *error) {
-            if (completion) completion(NO, nil, error);
-        }];
+        if (completion) completion(YES, response, nil);
+    }
+                                   failure:^(NSURLSessionDataTask *task, NSError *error) {
+        if (completion) completion(NO, nil, error);
+    }];
 }
 ```
 
@@ -248,6 +300,7 @@
 | `dispatch_async` 切主线程 | ✅ 成功/失败回调默认主线程 |
 | `[task resume]` | ✅ 自动 |
 | `timeoutInterval` 设置 | ✅ 可配（默认 60s） |
+| 业务 `code` 字段校验（code != 200） | ❌ 需自己写（AFNetworking 只判断 HTTP 状态码，不懂你 JSON 里的业务码） |
 
 ---
 
