@@ -149,18 +149,23 @@
 ```
 
 ```objc
-// ─── AFNetworking：~16 行 ───
+// ─── AFNetworking：~19 行 ───
 
 - (void)addUserWithName:(NSString *)name age:(NSString *)age
              completion:(NetworkCompletionBlock)completion {
     NSString *url = [NSString stringWithFormat:@"%@/user/save", kBaseURL];
     NSDictionary *params = @{@"name": name ?: @"", @"age": age ?: @""};
 
-    [[AFHTTPSessionManager manager] POST:url
-                              parameters:params
-                                 headers:nil            // ← 4.x 必须有
-                                progress:nil            // ← 上传进度，不要就传 nil
-                                 success:^(NSURLSessionDataTask *task, id response) {
+    AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+    // ★ 关键：默认是表单编码（application/x-www-form-urlencoded），
+    //   你服务器吃 JSON body，必须换成 JSON 序列化器，否则报 500
+    manager.requestSerializer = [AFJSONRequestSerializer serializer];
+
+    [manager POST:url
+       parameters:params
+          headers:nil            // ← 4.x 必须有
+         progress:nil            // ← 上传进度，不要就传 nil
+          success:^(NSURLSessionDataTask *task, id response) {
         NSInteger code = [response[@"code"] integerValue];
         if (code != 200) {
             NSString *msg = response[@"message"] ?: @"未知错误";
@@ -171,15 +176,16 @@
         }
         if (completion) completion(YES, response, nil);
     }
-                                 failure:^(NSURLSessionDataTask *task, NSError *error) {
+          failure:^(NSURLSessionDataTask *task, NSError *error) {
         if (completion) completion(NO, nil, error);
     }];
 }
 ```
 
+> ⚠️ **POST 报 500 的坑**：AFNetworking 的 POST 默认用表单编码（`AFHTTPRequestSerializer`），而原生代码设的是 `Content-Type: application/json`。你服务器接口吃 JSON，就必须 `manager.requestSerializer = [AFJSONRequestSerializer serializer]`，否则请求体格式不对，服务器返回 500。
+
 **AFNetworking 自动帮你做了：**
-- 设 `Content-Type: application/json`
-- NSJSONSerialization 序列化 bodyDict
+- NSJSONSerialization 序列化 bodyDict（需先换成 AFJSONRequestSerializer）
 - 检查序列化错误
 - 同上 GET 的所有自动处理
 
@@ -264,10 +270,13 @@
     NSString *url = [NSString stringWithFormat:@"%@/user/delete", kBaseURL];
     NSDictionary *params = @{@"id": userId};
 
-    [[AFHTTPSessionManager manager] DELETE:url
-                                parameters:params
-                                   headers:nil            // ← DELETE 没有 progress，直接到 success
-                                   success:^(NSURLSessionDataTask *task, id response) {
+    // ★ 注意：你服务器接口是 GET /user/delete?id=xxx，不是 HTTP DELETE 方法
+    //   所以这里用 GET，不是 DELETE
+    [[AFHTTPSessionManager manager] GET:url
+                             parameters:params
+                                headers:nil
+                               progress:nil
+                                success:^(NSURLSessionDataTask *task, id response) {
         NSInteger code = [response[@"code"] integerValue];
         if (code != 200) {
             NSString *msg = response[@"message"] ?: @"未知错误";
@@ -278,11 +287,13 @@
         }
         if (completion) completion(YES, response, nil);
     }
-                                   failure:^(NSURLSessionDataTask *task, NSError *error) {
+                                failure:^(NSURLSessionDataTask *task, NSError *error) {
         if (completion) completion(NO, nil, error);
     }];
 }
 ```
+
+> ⚠️ **删除报 500 的坑**：你原生删除用的是 `GET /user/delete?id=xxx`（HTTP 方法 = GET），不是 HTTP 的 DELETE 方法。改 AFNetworking 时如果用了 `DELETE:`，方法不对，服务器直接 500。必须用 `GET:` 传 parameters（AFNetworking 自动拼到 URL 上）。
 
 ---
 
