@@ -926,3 +926,68 @@ Cell 调自己的 `configureWithItem:`，方法里 `self.progressLabel.text = xx
 | 多线程 Array 崩溃 | 没加锁 | 拿 `@synchronized` 包住所有 `addObject:` |
 | `dispatch_group_notify` 不触发 | 任务没丢进组里（用了 `dispatch_async` 而非 `dispatch_group_async`） | 改成 `dispatch_group_async` |
 
+
+---
+
+## 十五、继承版运行逻辑与语法理论（2026-08-14）
+
+> 今天深入追问了继承版（02b）的运行机制，整理成语法卡片，方便反复背。
+
+### 15.1 继承版完整运行链路
+
+```objc
+DisplayView *box = [[DisplayView alloc] init];     // init 内部调 initWithFrame → setupSubviews
+box.image = [UIImage imageNamed:@"test.jpg"];      // 触发下面 setImage:
+
+// 完整链路：
+box.image = 图片
+    ↓ 编译器翻译成 [box setImage:图片]
+    ↓
+- (void)setImage:(UIImage *)image {
+    _image = image;              // ① 存到成员变量
+    if (image) {
+        _imageView.image = image;   // ② 设到内部 UIImageView 上
+        _imageView.hidden = NO;     // ③ 显示
+    } else {
+        _imageView.hidden = YES;    // 隐藏
+    }
+}
+```
+
+其中 `_imageView` 的属性（contentMode、clipsToBounds、hidden、约束）在 `initWithFrame:` → `setupSubviews` 里一次性设好。
+
+### 15.2 为什么 UIImageView 直接用 `.image`，自定义类要自己写 setter
+
+| 情况 | setter 谁写的 | 内部做了什么 |
+|------|-------------|------------|
+| `UIImageView.image` | 系统写好的 | 存图 + 重新渲染屏幕 |
+| `DisplayView.image`（继承版） | 你重写的 | 存图 + 设到内部 UIImageView |
+| `UIView.image`（分类版） | 你手写的 | 存关联表 + 设到内部 UIImageView |
+
+**核心：点语法永远翻译成 setter 调用。** 系统类的 setter 里已经写好了渲染逻辑，你的自定义类没有，得自己补上"显示"这一步。
+
+### 15.3 setter 内必须用 `_xxx` 不用 `self.xxx`（防死循环）
+
+```objc
+- (void)setImage:(UIImage *)image {
+    _image = image;        // ✅ 直接摸成员变量
+    // self.image = image; // ❌ 又调 setImage: → 无限递归 → 崩溃
+}
+```
+
+- `self.xxx` = 走方法（getter/setter）
+- `_xxx` = 直接摸成员变量，绕过方法
+- **在 setter/getter 内部必须用 `_xxx`**，否则自己调自己死循环
+- `_imageView` 在 setupSubviews 里两者等价，用下划线更直接
+
+### 15.4 继承版 vs 分类版 —— 存值和建视图的翻译对照
+
+| 动作 | 继承版 | 分类版 |
+|------|--------|--------|
+| 声明属性 | `@property` 自动生成 `_image` + setter | `@property` 只声明，全手写 |
+| 存图 | `_image = image` | `objc_setAssociatedObject(self, kKey, image, ...)` |
+| 取值 | `return _image` | `objc_getAssociatedObject(self, kKey)` |
+| 建子视图 | `init` 里 `setupSubviews` 一次建完 | 懒加载 getter 里 `if (!iv)` 创建 |
+| 复用子视图 | 不用管，init 只跑一次 | 懒加载 `if (!iv)` 保证只创建一次 |
+
+**核心不变：** 都是"存一张图 → 创建 UIImageView → 把图设上去"，只是"存"和"创建"的方式换了写法。
