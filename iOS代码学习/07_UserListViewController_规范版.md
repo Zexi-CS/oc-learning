@@ -1,6 +1,7 @@
-# 06 — UserListViewController 主界面
+# UserListViewController — 规范版
 
-> 第六步：把所有东西串起来的页面控制器。TableView + 增删改查 + 文件下载。
+> 把所有东西串起来的页面控制器。TableView + 增删改查 + 文件下载。
+> **符合正常项目规范**：方法拆分、完整错误处理、进度条、二次确认，适合作为标准参照。
 
 ---
 

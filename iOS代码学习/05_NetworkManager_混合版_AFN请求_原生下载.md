@@ -1,8 +1,9 @@
-# NetworkManageAFN 版 — 用 AFNetworking 重构 NetworkManager
+# NetworkManager — 混合版（AFN 请求 + 原生下载）
 
-> 将网络编程项目的 NetworkManager 从原生 NSURLSession 改造成 AFNetworking 实现。
-> **核心：外部调用接口完全不变，只改内部实现。**
-> 覆盖完整 5 个接口：GET 列表 / POST 新增 / GET 修改 / GET 删除 / 下载文件。
+> 将网络编程项目的 NetworkManager 改造成**混合实现**：
+> - **数据获取（增删改查）** → **AFNetworking**（manager，用 GET/POST，简单省事）
+> - **下载文件** → **原生 NSURLSessionDownloadTask + delegate**（题目要求的第一种方式）
+> 核心：外部调用接口完全不变，只改内部实现。覆盖完整 5 个接口：GET 列表 / POST 新增 / GET 修改 / GET 删除 / 原生下载。
 
 ---
 
@@ -121,12 +122,21 @@ typedef void (^DownloadCompletionBlock)(BOOL success, NSString * _Nullable fileP
 static NSString * const kBaseURL = @"http://10.17.66.196:8086";
 
 
-// ★★ 关键新增 ⚠️：类扩展里声明 manager 属性（原版没有这行！）
-// 原版里 session 是每个方法内部临时创建的，所以不需要成员变量
-// 但 AFN 版 manager 需要在 init 里配置一次（JSON 序列化器），然后所有方法共用，
-// 所以必须存成属性 → 编译器自动生成 _manager 成员变量
-@interface NetworkManager ()
-@property (nonatomic, strong) AFHTTPSessionManager *manager;
+// ★★ 混合版类扩展 ⚠️：
+//   ① manager（AFN）→ 管增删改查（数据获取）
+//   ② downloadSession（原生 NSURLSession）→ 管下载（题目要求的第一种方式）
+//   ③ 签 NSURLSessionDownloadDelegate 协议 → 下载靠 delegate 三个方法回调
+//   ④ 两个回调 Block + resumeData → 存下载进度/完成回调，供 delegate 方法里调用（原生 delegate 需要手动存）
+@interface NetworkManager () <NSURLSessionDownloadDelegate>
+
+@property (nonatomic, strong) AFHTTPSessionManager *manager;      // AFN：增删改查用
+@property (nonatomic, strong) NSURLSession *downloadSession;      // 原生：下载用
+
+// 下载相关的回调 Block（原生 delegate 要跨方法取用，必须存成属性）
+@property (nonatomic, copy) DownloadProgressBlock downloadProgressBlock;      // 存进度回调
+@property (nonatomic, copy) DownloadCompletionBlock downloadCompletionBlock;  // 存完成回调
+@property (nonatomic, strong) NSData *downloadResumeData;                      // 断点续传数据（可选）
+
 @end
 
 
@@ -150,13 +160,20 @@ static NSString * const kBaseURL = @"http://10.17.66.196:8086";
 - (instancetype)initPrivate {
     self = [super init];
     if (self) {
-        // ★ 改动标记 ⚠️【关键】：
-        // 原生版这里注释说"后续会创建 NSURLSession"
-        // AFN 版不再需要自己建 session —— AFHTTPSessionManager 内部自动创建了
-        // 这里只需持有 manager，并配置成 JSON 序列化（服务器吃 JSON body）
+        // ★ 混合版 ⚠️【关键】：
+        //   数据获取（增删改查）→ AFNetworking（manager 内部自动建 NSURLSession）
+        //   下载 → 原生 NSURLSessionDownloadTask（单独建一个 downloadSession，delegate = self）
 
+        // ─── ① AFN：数据获取用 ───
         _manager = [AFHTTPSessionManager manager];
         _manager.requestSerializer = [AFJSONRequestSerializer serializer];   // ★ POST 必须用 JSON，否则 500
+
+        // ─── ② 原生：下载用 ───
+        //   NSURLSessionConfiguration 是底层的"配置项"（超时、缓存、证书策略等），这里用默认配置即可
+        NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+        _downloadSession = [NSURLSession sessionWithConfiguration:config
+                                                         delegate:self      // ★ delegate = 自己，接收下载回调
+                                                    delegateQueue:nil];      // nil = 系统自动开一条串行队列
     }
     return self;
 }
@@ -342,12 +359,21 @@ static NSString * const kBaseURL = @"http://10.17.66.196:8086";
 
 // ============================================================
 // 下载文件到沙盒 Documents
-// ★ AFNetworking 版：用 downloadTaskWithRequest:progress:destination:completionHandler:
-//   比原生版的 3 个 delegate 方法简单得多（AFN 帮你处理了临时文件移动）
+// ★ 混合版 ⚠️：下载用「原生 NSURLSessionDownloadTask + delegate」
+//   这是题目要求的第一种方式（不是 AFNetworking 下载）
+//   因为 delegate 回调会分成多个方法触发，所以要先存好回调 Block
 // ============================================================
 - (void)downloadFileFromURL:(NSString *)urlString
                    progress:(DownloadProgressBlock)progressBlock
                  completion:(DownloadCompletionBlock)completion {
+
+    // ─────────────────────────────────────────────
+    // 第 1 步：存好回调 Block
+    //   原因：原生版下载靠 delegate 三个方法，它们不是一次调用里就能拿到回调的，
+    //        进度/完成回调要等 delegate 方法触发时才用。所以先存成属性，等 delegate 里再取。
+    // ─────────────────────────────────────────────
+    self.downloadProgressBlock = progressBlock;
+    self.downloadCompletionBlock = completion;
 
     NSURL *url = [NSURL URLWithString:urlString];
     if (!url) {
@@ -357,56 +383,120 @@ static NSString * const kBaseURL = @"http://10.17.66.196:8086";
 
     NSLog(@"[下载] 开始下载：%@", urlString);
 
-    NSURLRequest *request = [NSURLRequest requestWithURL:url];
+    // ── 第 2 步：创建原生下载任务（NSURLSessionDownloadTask）──
+    //    注意：downloadSession 是 init 里建好的原生 session（delegate = self）
+    //    下载任务用 downloadTaskWithURL:（不需要手动建 request，直接传 URL）
+    NSURLSessionDownloadTask *downloadTask = [self.downloadSession downloadTaskWithURL:url];
 
-    // ★ AFNetworking 的下载方法：
-    //    progress: 下载进度，AFN 自动在子线程回调（含进度）
-    //    destination: 返回"下载完成后把文件放到哪个路径"（AFN 自动移动临时文件）
-    //    completionHandler: 下载结束回调（filePath = 你 destination 返回的路径）
-    NSURLSessionDownloadTask *downloadTask =
-        [self.manager downloadTaskWithRequest:request
-                                     progress:^(NSProgress *downloadProgress) {
-        // ---- 下载进度回调（子线程）----
-        double p = downloadProgress.fractionCompleted;   // 0.0 ~ 1.0
-        NSLog(@"[下载进度] %.1f%%", p * 100);
+    // ── 第 3 步：启动（原生不会自动 resume，必须手动调）──
+    [downloadTask resume];
+}
 
-        // 进度回调也不在主线程，切回去再调 Block
+
+#pragma mark - NSURLSessionDownloadDelegate（原生下载回调，系统自动调）
+
+// ★ 下载进度回调 — 下载过程中反复调用 ★
+- (void)URLSession:(NSURLSession *)session
+      downloadTask:(NSURLSessionDownloadTask *)downloadTask
+      didWriteData:(int64_t)bytesWritten              // 本次写了多少
+ totalBytesWritten:(int64_t)totalBytesWritten          // 已经写了多少
+totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {  // 总共多少
+
+    if (totalBytesExpectedToWrite <= 0) return;   // 获取不到总大小，跳过
+
+    double progress = (double)totalBytesWritten / (double)totalBytesExpectedToWrite;
+
+    NSLog(@"[下载进度] %.1f%%", progress * 100);
+
+    // delegate 方法在子线程调，回主线程再调 Block（更新 UI 用）
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.downloadProgressBlock) {
+            self.downloadProgressBlock(progress);
+        }
+    });
+}
+
+
+// ★ 下载完成回调 — 文件在系统临时目录，需要移到 Documents ★
+- (void)URLSession:(NSURLSession *)session
+      downloadTask:(NSURLSessionDownloadTask *)downloadTask
+didFinishDownloadingToURL:(NSURL *)location {
+    //   location 是系统临时文件夹的路径（随时会被清理）
+
+    // ---- 1. 获取文件名 ----
+    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)downloadTask.response;
+    NSString *filename = nil;
+
+    // 优先从 Content-Disposition 响应头里提取文件名
+    NSString *contentDisposition = httpResponse.allHeaderFields[@"Content-Disposition"];
+    if (contentDisposition) {
+        NSRange range = [contentDisposition rangeOfString:@"filename="];
+        if (range.location != NSNotFound) {
+            filename = [contentDisposition substringFromIndex:range.location + range.length];
+            filename = [filename stringByReplacingOccurrencesOfString:@"\"" withString:@""];
+            filename = [filename stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        }
+    }
+
+    // 备选：从 URL 最后一段取文件名
+    if (!filename.length) {
+        filename = downloadTask.response.suggestedFilename;
+    }
+
+    // 兜底：时间戳文件名
+    if (!filename.length) {
+        filename = [NSString stringWithFormat:@"download_%@.file", @([[NSDate date] timeIntervalSince1970])];
+    }
+
+    NSLog(@"[下载完成] 文件名：%@", filename);
+
+    // ---- 2. 移动到沙盒 Documents ----
+    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *destPath = [documentsPath stringByAppendingPathComponent:filename];
+
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    // ---- 3. 如果目标已存在，先删掉旧的（避免 move 失败）----
+    if ([fm fileExistsAtPath:destPath]) {
+        [fm removeItemAtPath:destPath error:nil];
+    }
+
+    // ---- 4. 把临时文件移动到 Documents ----
+    NSError *moveError = nil;
+    BOOL moved = [fm moveItemAtURL:location toURL:[NSURL fileURLWithPath:destPath] error:&moveError];
+
+    if (moved) {
+        NSLog(@"[文件保存成功] %@", destPath);
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (progressBlock) progressBlock(p);
+            if (self.downloadCompletionBlock) self.downloadCompletionBlock(YES, destPath, nil);
+        });
+    } else {
+        NSLog(@"[文件保存失败] %@", moveError.localizedDescription);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.downloadCompletionBlock) self.downloadCompletionBlock(NO, nil, moveError);
         });
     }
-                                  destination:^NSURL *(NSURL *targetPath, NSURLResponse *response) {
-        // ---- 决定"把这个文件放到哪" ----
-        // 返回一个沙盒 Documents 里的完整路径（AFN 自动把临时文件移过来）
+}
 
-        // 1. 取文件名：优先 suggestedFilename（系统从 URL/响应头判断的文件名）
-        NSString *filename = response.suggestedFilename;
-        if (!filename.length) {
-            // 兜底：时间戳文件名
-            filename = [NSString stringWithFormat:@"download_%@.file", @([[NSDate date] timeIntervalSince1970])];
-        }
 
-        // 2. 拼到 Documents 目录下
-        NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(
-            NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-        NSString *destPath = [documentsPath stringByAppendingPathComponent:filename];
+// ★ 下载结束（成功或失败）都调用 — 用 error 区分 ★
+- (void)URLSession:(NSURLSession *)session
+              task:(NSURLSessionTask *)task
+didCompleteWithError:(NSError *)error {
+    // error == nil → 成功；error != nil → 失败原因
 
-        NSLog(@"[下载完成] 保存到：%@", destPath);
-        return [NSURL fileURLWithPath:destPath];
+    if (error) {
+        NSLog(@"[下载失败] %@", error.localizedDescription);
+
+        // 可选的断点续传：从 error 里取出已下载数据，存起来（本次简版可忽略）
+        self.downloadResumeData = error.userInfo[NSURLSessionDownloadTaskResumeData];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.downloadCompletionBlock) self.downloadCompletionBlock(NO, nil, error);
+        });
     }
-                            completionHandler:^(NSURLResponse *response, NSURL *filePath, NSError *error) {
-        // ---- 下载结束（成功或失败）----
-        // ★ AFN 已经在主线程回调（manager 默认主线程完成回调）
-        if (error) {
-            NSLog(@"[下载失败] %@", error.localizedDescription);
-            if (completion) completion(NO, nil, error);
-        } else {
-            NSLog(@"[文件保存成功] %@", filePath.path);
-            if (completion) completion(YES, filePath.path, nil);
-        }
-    }];
-
-    [downloadTask resume];   // 别忘了启动
+    // error == nil → 成功已经在上面的 didFinishDownloadingToURL 里处理 move，这里不需要重复调
 }
 
 @end
@@ -416,37 +506,56 @@ static NSString * const kBaseURL = @"http://10.17.66.196:8086";
 
 ## 四、改动对照总结（原生版 → AFN 版）
 
-### 4.0 新增成员变量 `_manager`（最关键）
+### 4.0 混合版属性（AFN + 原生下载，两个并存）
 
-| | 原生版 | AFN 版 |
+| | 原生版 | 混合版 |
 |------|--------|--------|
-| 有没有 manager 属性 | 没有（session 是方法内临时建的） | **有**：`@interface NetworkManager ()` 里 `@property AFHTTPSessionManager *manager` |
+| 数据获取 | 每个方法内部 `[NSURLSession sharedSession]` | **有**：`@property AFHTTPSessionManager *manager` |
+| 下载 | 单独建 `downloadSession` + delegate | **也有**：`@property NSURLSession *downloadSession` + 签 `NSURLSessionDownloadDelegate` |
+| 下载回调 | `_downloadProgressBlock` 等 | 同样需要（delegate 要跨方法取回调） |
 
-**为什么 AFN 版必须有这个属性？**
-- 原版每个方法内部 `[NSURLSession sharedSession]` 即拿即用，不用存
-- AFN 版 manager 要在 init 里配置一次（JSON 序列化器），然后**五个方法（含下载）共用同一个**，所以必须存成属性
-- 另外原版还有 `downloadSession`、`downloadProgressBlock`、`downloadCompletionBlock`、`downloadResumeData` 等属性，**AFN 版全部不需要**——因为 AFN 用 Block 回调，不用 delegate，也不用手动存回调 Block
+**类扩展需要声明的东西（和原版几乎一样，只是多了个 manager）：**
 
-### 4.5 下载方法对比（原版 3 个 delegate 方法 → AFN 1 个方法）
+```objc
+@interface NetworkManager () <NSURLSessionDownloadDelegate>
+@property (nonatomic, strong) AFHTTPSessionManager *manager;   // 增删改查用
+@property (nonatomic, strong) NSURLSession *downloadSession;   // 下载用
+@property (nonatomic, copy) DownloadProgressBlock downloadProgressBlock;
+@property (nonatomic, copy) DownloadCompletionBlock downloadCompletionBlock;
+@property (nonatomic, strong) NSData *downloadResumeData;
+@end
+```
 
-| | 原生版 | AFN 版 |
-|------|--------|--------|
-| 建下载 session | 单独建 `downloadSession`，设 delegate = self | 不需要，共用 `self.manager` |
-| 进度回调 | `URLSession:downloadTask:didWriteData:`（delegate） | `downloadTaskWithRequest:progress:` 的 Block |
-| 完成回调 | `didFinishDownloadingToURL:`（delegate）+ 手动移文件 | `destination:` Block（返回路径，AFN 自动移文件） |
-| 失败回调 | `didCompleteWithError:`（delegate） | `completionHandler:`（error 非空即失败） |
-| 手动存回调 Block | `_downloadProgressBlock` / `_downloadCompletionBlock` | 不需要，Block 直接用参数 |
-| 代码量 | 约 130 行（含 3 个 delegate 方法） | 约 60 行 |
+**为什么数据获取用 AFN、下载却用原生？** 这正是你的需求组合——增删改查是普通 JSON 接口，AFN 省网络层脏活；下载要求 NSURLSessionDownloadTask（题目指定），用原生 delegate。两个各管一段，互不干扰。
 
-**AFN 下载最大的简化**：原版要建独立下载 session + 实现 3 个 delegate 方法 + 手动移临时文件 + 手动存回调 Block。AFN 版一个 `downloadTaskWithRequest:progress:destination:completionHandler:` 全搞定，`destination:` 决定保存路径，AFN 自动处理临时文件移动。
-- `@property manager` → 编译器生成 `_manager` 成员变量 → 四个请求方法里 `self.manager` 才能用
+### 4.5 为什么下载用原生（不改成 AFN 下载）
+
+**这是你的明确选择**：增删改查用 AFN，但**下载必须用题目要求的 NSURLSessionDownloadTask**。
+
+```
+错误做法：把下载也改成 AFN
+  [self.manager downloadTaskWithRequest:...]  ← 这就不符合题目要求了
+
+正确做法：下载保持原生 delegate
+  [self.downloadSession downloadTaskWithURL:url] + 3 个 delegate 方法
+```
+
+| | AFN 下载（不推荐，违反题目） | 原生 NSURLSessionDownloadTask（✅ 本题要求） |
+|------|------------------------|----------------------------------|
+| 建下载 session | 共用 `self.manager` | 单独 `downloadSession`，delegate = self |
+| 进度回调 | `progress:` Block | `URLSession:downloadTask:didWriteData:` |
+| 完成回调 | `destination:` + `completionHandler:` | `didFinishDownloadingToURL:`（手动移文件） |
+| 失败回调 | `completionHandler:`（error 判断） | `didCompleteWithError:` |
+| 断点续传 | 需自己搞 | 原生支持（`NSURLSessionDownloadTaskResumeData`） |
+
+**所以下载部分的代码 = 原版 07 那套（delegate 3 方法），只是嵌套在混合版 NetworkManager 里。**
 
 ### 4.1 init 初始化
 
-| | 原生版 | AFN 版 |
+| | 数据获取 | 下载 |
 |------|--------|--------|
-| 建 session | 注释"后续会创建 NSURLSession" | **不再需要**，`_manager = [AFHTTPSessionManager manager]` 内部自带 |
-| 序列化器 | 无 | `_manager.requestSerializer = [AFJSONRequestSerializer serializer]` |
+| 建什么 | `_manager = [AFHTTPSessionManager manager]` | `_downloadSession = [NSURLSession sessionWithConfiguration:delegate:self:]` |
+| 配置 | `requestSerializer = [AFJSONRequestSerializer serializer]` | 默认配置即可 |
 
 ### 4.2 GET 请求
 
@@ -479,13 +588,15 @@ static NSString * const kBaseURL = @"http://10.17.66.196:8086";
 2. **删除/修改报 500**：你服务器是 `GET /user/delete?id=`、`GET /user/update?id=`，**不是** HTTP DELETE/PUT → 全部用 `GET:` 传 parameters。
 3. **`headers:nil` 必须有**（AFNetworking 4.x 比 3.x 多这个参数），参数顺序固定：`url → parameters → headers → progress → success → failure`。
 4. **业务 code 校验**：只判断 HTTP 状态码还不够，要自己检查 JSON 里的 `code != 200`。
+5. **下载必须用原生 session，别用 AFN 下载**：`[self.downloadSession downloadTaskWithURL:url]` + 3 个 delegate 方法，这才是题目要求的 NSURLSessionDownloadTask。用了 `[self.manager downloadTaskWithRequest:]` 就是 AFNetworking 下载，不符合要求。
+6. **下载要存回调 Block**：原生 delegate 是分多个方法回调的，所以 `downloadFileFromURL:` 里必须先把 `progressBlock` 和 `completion` 存成属性，delegate 方法里再取出来调。类似"手动存回调 Block"。
 
 ---
 
 ## 六、头文件声明部分（.h 不用大改）
 
-原生版的 `.h` 只声明了 `+sharedManager` 和 `fetchUsersWithCompletion:`。如果你还写了 POST/修改/删除的声明（参考 03/04 文档），保持原样即可——**方法签名一字不改**，ViewController 无感知。
+原生版的 `.h` 只声明了 `+sharedManager` 和 `fetchUsersWithCompletion:`。如果你还写了 POST/修改/删除的声明（参考 03/04 文档），保持原样即可——**方法签名一字不改**，ViewController 无感知。下载方法 `downloadFileFromURL:progress:completion:` 的两个 Block 类型（`DownloadProgressBlock` / `DownloadCompletionBlock`）声明也在 .h 里。
 
 ---
 
-**总结：只用改 Podfile + NetworkManager.h/.m 两个文件，其余全部不用动。所有业务 code 校验逻辑保留，和原生版行为一致。**
+**总结：只用改 Podfile + NetworkManager.h/.m 两个文件，其余全部不用动。增删改查走 AFNetworking（manager），下载走原生 NSURLSessionDownloadTask（downloadSession + delegate），各管一段。所有业务 code 校验逻辑保留，和原生版行为一致。**
