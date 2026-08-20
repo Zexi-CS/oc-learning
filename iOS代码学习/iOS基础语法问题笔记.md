@@ -2,6 +2,8 @@
 
 > 记录日常学习中遇到的基础概念和语法问题，持续更新。
 
+
+
 ---
 
 ## 一、数组排序
@@ -10,10 +12,10 @@
 
 两者都是 `NSMutableArray` 的系统方法，本质：**你只定义"怎么比大小"，系统负责"反复调用来排好序"。**
 
-| 方法 | 比较规则在哪 | 适用场景 |
-|---|---|---|
+| 方法                                      | 比较规则在哪              | 适用场景                           |
+| --------------------------------------- | ------------------- | ------------------------------ |
 | `sortUsingSelector:@selector(compare:)` | 元素自带的 `compare:` 方法 | NSString、NSNumber、NSDate 等系统类型 |
-| `sortUsingComparator:(Block)` | 你现场写的 Block 里 | 自定义对象、多字段排序、复杂逻辑 |
+| `sortUsingComparator:(Block)`           | 你现场写的 Block 里       | 自定义对象、多字段排序、复杂逻辑               |
 
 **核心理解：代码只写一行，没有 for/while。系统内部会自动多轮扫描，反复调用你的比较规则，直到全部排好。**
 
@@ -37,10 +39,10 @@ return 0;
 
 ### 1.4 返回值约定
 
-| 返回值 | 含义 |
-|---|---|
+| 返回值                       | 含义                  |
+| ------------------------- | ------------------- |
 | `NSOrderedAscending` (-1) | obj1 排在 obj2 **前面** |
-| `NSOrderedSame` (0) | 相等，顺序不变 |
+| `NSOrderedSame` (0)       | 相等，顺序不变             |
 | `NSOrderedDescending` (1) | obj1 排在 obj2 **后面** |
 
 ---
@@ -171,6 +173,7 @@ extern NSString * const kMyNotification;
 // .m 文件
 NSString * const kMyNotification = @"MyNotification";
 ```
+
 发和收都用这个常量，避免字符串拼错。
 
 ### 6.4 解除监听（必须做）
@@ -360,12 +363,12 @@ AppDelegate 管全局                  AppDelegate 管全局 + 各 Scene 管自�
 
 **Xcode 11+ 新建项目自动带有 SceneDelegate。老项目迁移到 iOS 13+ 只有 AppDelegate，window 和前后台回调都还在 AppDelegate 里。**
 
-| | AppDelegate | SceneDelegate |
-|---|---|---|
-| 存在版本 | iOS 所有版本 | iOS 13+ |
-| 管什么 | 整个应用（全局配置、数据库、推送） | 单个窗口（UI、前后台） |
-| window 在哪 | iOS 12 以前在这 | iOS 13 以后在这 |
-| 前后台回调 | 有（老项目） | 有（新项目优先用这个） |
+|           | AppDelegate       | SceneDelegate |
+| --------- | ----------------- | ------------- |
+| 存在版本      | iOS 所有版本          | iOS 13+       |
+| 管什么       | 整个应用（全局配置、数据库、推送） | 单个窗口（UI、前后台）  |
+| window 在哪 | iOS 12 以前在这       | iOS 13 以后在这   |
+| 前后台回调     | 有（老项目）            | 有（新项目优先用这个）   |
 
 ---
 
@@ -543,16 +546,16 @@ ViewController 是日常开发中用得最多的生命周期，理解透每个�
 
 **关键理解：**
 
-| 方法 | 调几次 | 经典用途 | 此时 view 存在吗 |
-|---|---|---|---|
-| `init` | 1 次 | 初始化属性、标题 | ❌ 没有 |
-| `loadView` | 1 次 | 创建 view（一般不重写） | ❌ 正在创建 |
-| `viewDidLoad` | 1 次 | 添加子控件、设约束、请求数据 | ✅ 已加载 |
-| `viewWillAppear:` | N 次 | 刷新列表、显示导航栏 | ✅ |
-| `viewDidAppear:` | N 次 | 开始定时器、开启动画 | ✅ |
-| `viewWillDisappear:` | N 次 | 隐藏键盘、保存草稿 | ✅ |
-| `viewDidDisappear:` | N 次 | 停止定时器、取消请求 | ✅（但仍存在） |
-| `dealloc` | 1 次 | 移除通知、释放资源 | ✅（即将释放） |
+| 方法                   | 调几次 | 经典用途           | 此时 view 存在吗 |
+| -------------------- | --- | -------------- | ----------- |
+| `init`               | 1 次 | 初始化属性、标题       | ❌ 没有        |
+| `loadView`           | 1 次 | 创建 view（一般不重写） | ❌ 正在创建      |
+| `viewDidLoad`        | 1 次 | 添加子控件、设约束、请求数据 | ✅ 已加载       |
+| `viewWillAppear:`    | N 次 | 刷新列表、显示导航栏     | ✅           |
+| `viewDidAppear:`     | N 次 | 开始定时器、开启动画     | ✅           |
+| `viewWillDisappear:` | N 次 | 隐藏键盘、保存草稿      | ✅           |
+| `viewDidDisappear:`  | N 次 | 停止定时器、取消请求     | ✅（但仍存在）     |
+| `dealloc`            | 1 次 | 移除通知、释放资源      | ✅（即将释放）     |
 
 **易错点：**
 
@@ -654,11 +657,11 @@ UIView 的生命周期比较简单，核心只有三个方法。
 
 **UIView 生命周期总结：**
 
-| 方法 | 调几次 | 经典用途 | 使用频率 |
-|---|---|---|---|
+| 方法               | 调几次 | 经典用途         | 使用频率 |
+| ---------------- | --- | ------------ | ---- |
 | `initWithFrame:` | 1 次 | 初始化子控件、设置背景色 | 每次都写 |
-| `layoutSubviews` | 多次 | 手动布局（不用约束时） | 偶尔 |
-| `drawRect:` | 按需 | 自定义绘制（画线画图形） | 极少 |
+| `layoutSubviews` | 多次  | 手动布局（不用约束时）  | 偶尔   |
+| `drawRect:`      | 按需  | 自定义绘制（画线画图形） | 极少   |
 
 ---
 
@@ -721,6 +724,7 @@ Window（整个屏幕）
 ### 8.1 为什么子控件必须加在 `contentView` 上
 
 Cell 内部有分层：
+
 - `cell` 本身不动
 - `cell.contentView` 会在编辑模式（删除按钮出现）时自动向右缩进
 - 如果子控件加在 `cell` 上（和 contentView 平级），就不会跟着挪
@@ -739,10 +743,10 @@ Cell 内部有分层：
 
 **两者不是一回事：**
 
-| | AutoLayout | Storyboard |
-|---|---|---|
-| 本质 | 布局计算规则 | 可视化编辑工具 |
-| 管什么 | 控件放哪、多大 | 控件长什么样 |
+|     | AutoLayout | Storyboard |
+| --- | ---------- | ---------- |
+| 本质  | 布局计算规则     | 可视化编辑工具    |
+| 管什么 | 控件放哪、多大    | 控件长什么样     |
 
 两者可以组合，不冲突。
 
@@ -759,10 +763,10 @@ Cell 内部有分层：
 
 **怎么拖：** 打开辅助编辑器（`⌘⌥↩`）让代码和界面并排 → 按住 **Ctrl** 从控件拖到代码 → 松手弹窗。
 
-| 类型 | 作用 | 拖到哪 |
-|---|---|---|
-| **Outlet**（属性） | 让代码"控制"控件（改文字/颜色） | `.h` 的 `@interface` |
-| **Action**（方法） | 让控件"触发"代码（点击响应） | `.m` 的 `@implementation` |
+| 类型             | 作用                | 拖到哪                      |
+| -------------- | ----------------- | ------------------------ |
+| **Outlet**（属性） | 让代码"控制"控件（改文字/颜色） | `.h` 的 `@interface`      |
+| **Action**（方法） | 让控件"触发"代码（点击响应）   | `.m` 的 `@implementation` |
 
 **判断标准：** 想"操作它" → Outlet；想"被它通知" → Action。一个控件可以同时连两种（比如按钮既要改文字又要响应点击）。
 
@@ -770,12 +774,12 @@ Cell 内部有分层：
 
 ### 9.4 Storyboard 右下角四个图标
 
-| 图标 | 作用 |
-|---|---|
-| ① Align | 对齐：水平/垂直居中、左右对齐（管"居不居中"） |
-| ② Add New Constraints（Pin） | 间距+尺寸：四根线是间距，Width/Height 是尺寸 |
-| ③ Resolve Auto Layout Issues | 修复约束冲突（红）/缺失（黄） |
-| ④ Embed In | 把控件包进 Stack View 等容器 |
+| 图标                           | 作用                            |
+| ---------------------------- | ----------------------------- |
+| ① Align                      | 对齐：水平/垂直居中、左右对齐（管"居不居中"）      |
+| ② Add New Constraints（Pin）   | 间距+尺寸：四根线是间距，Width/Height 是尺寸 |
+| ③ Resolve Auto Layout Issues | 修复约束冲突（红）/缺失（黄）               |
+| ④ Embed In                   | 把控件包进 Stack View 等容器          |
 
 **关键：** ① Align 管"对齐"，② Pin 管"间距+尺寸"，两者配合才能定死一个控件。
 
@@ -800,11 +804,11 @@ UIApplication（整个应用）
                     └── rootViewController.view
 ```
 
-| | 是什么 | 你 new 吗 |
-|---|---|---|
-| `UIScene` | 抽象基类（概念） | ❌ 抽象不能实例化 |
-| `UIWindowScene` | `UIScene` 的子类 | ⚠️ 系统创建 |
-| `UIWindow` | 视图容器 | ✅ 你手动创建 |
+|                 | 是什么           | 你 new 吗   |
+| --------------- | ------------- | --------- |
+| `UIScene`       | 抽象基类（概念）      | ❌ 抽象不能实例化 |
+| `UIWindowScene` | `UIScene` 的子类 | ⚠️ 系统创建   |
+| `UIWindow`      | 视图容器          | ✅ 你手动创建   |
 
 **【易混淆】** 用户问"Scene、Window、WindowScene 谁是谁"——核心是**包含关系**：Scene 是抽象概念，WindowScene 是"带窗口的具体场景"，Window 是"装视图的箱子"。
 
@@ -812,10 +816,10 @@ UIApplication（整个应用）
 
 **关键在 Info.plist 里有没有配置"Main storyboard"。**
 
-| | Storyboard 项目 | 纯代码项目 |
-|---|---|---|
-| Info.plist | ✅ 有 Main storyboard | ❌ 没有 |
-| 启动 | 系统自动加载 Storyboard + 设根控制器 | 调 `willConnectToSession:` 你手动写 |
+|            | Storyboard 项目             | 纯代码项目                          |
+| ---------- | ------------------------- | ------------------------------ |
+| Info.plist | ✅ 有 Main storyboard       | ❌ 没有                           |
+| 启动         | 系统自动加载 Storyboard + 设根控制器 | 调 `willConnectToSession:` 你手动写 |
 
 **纯代码为什么要在 SceneDelegate 手动设根控制器？** 因为 Info.plist 没有配置，系统不知道显示啥，就调 `willConnectToSession:` 这个"钩子"让你手动创建 window + 设根控制器。
 
@@ -835,12 +839,12 @@ Storyboard 里的每个场景都有一个 **Custom Class** 设置，意思是"�
 
 **两种方式：**
 
-| | push/pop | present/dismiss |
-|---|---|---|
-| 需要导航控制器吗 | ✅ 必须先包 UINavigationController | ❌ 不需要 |
-| 视觉 | 从右滑入，自带返回按钮 | 从下弹出 |
-| 返回 | `popViewControllerAnimated:` | `dismissViewControllerAnimated:` |
-| 场景 | 详情页、下级页面 | 登录弹窗、设置页 |
+|          | push/pop                      | present/dismiss                  |
+| -------- | ----------------------------- | -------------------------------- |
+| 需要导航控制器吗 | ✅ 必须先包 UINavigationController | ❌ 不需要                            |
+| 视觉       | 从右滑入，自带返回按钮                   | 从下弹出                             |
+| 返回       | `popViewControllerAnimated:`  | `dismissViewControllerAnimated:` |
+| 场景       | 详情页、下级页面                      | 登录弹窗、设置页                         |
 
 ```objc
 // push
@@ -860,10 +864,10 @@ LoginVC *login = [[LoginVC alloc] init];
 
 ### 10.5 导航控制器与标签栏控制器
 
-| | UINavigationController | UITabBarController |
-|---|---|---|
-| 管什么 | 顶部 navigationBar + 中间内容 | 底部 tabBar + 中间内容 |
-| 职责 | 页面"纵向"深入（push/pop） | 栏目"横向"切换（tab） |
+|     | UINavigationController  | UITabBarController |
+| --- | ----------------------- | ------------------ |
+| 管什么 | 顶部 navigationBar + 中间内容 | 底部 tabBar + 中间内容   |
+| 职责  | 页面"纵向"深入（push/pop）      | 栏目"横向"切换（tab）      |
 
 **按需设根：** 单页面 → 直接设 VC；要跳转 → 设导航控制器；要分栏目 → 设标签栏控制器。
 
@@ -895,11 +899,11 @@ UINavigationController *nav = [[UINavigationController alloc] initWithRootViewCo
 
 App 有三个状态，不是只有"前台/后台"两种：
 
-| 状态 | 能看到吗 | 能交互吗 |
-|---|---|---|
-| **Active**（激活） | ✅ | ✅ |
-| **Inactive**（失焦） | ✅ | ❌ |
-| **Background**（后台） | ❌ | ❌ |
+| 状态                 | 能看到吗 | 能交互吗 |
+| ------------------ | ---- | ---- |
+| **Active**（激活）     | ✅    | ✅    |
+| **Inactive**（失焦）   | ✅    | ❌    |
+| **Background**（后台） | ❌    | ❌    |
 
 **"焦点" = 谁能接收用户的触摸输入。** 失焦 = 看得到但点不了。
 
@@ -956,12 +960,12 @@ stack.distribution = UIStackViewDistributionFillEqually;  // 等宽
 [stack addArrangedSubview:block2];
 ```
 
-| 属性 | 作用 |
-|---|---|
-| `axis` | 排列方向（Horizontal 横 / Vertical 竖） |
-| `spacing` | 子视图间距 |
-| `distribution` | 尺寸分配（`FillEqually` = 等宽均分） |
-| `alignment` | 对齐方式 |
+| 属性             | 作用                              |
+| -------------- | ------------------------------- |
+| `axis`         | 排列方向（Horizontal 横 / Vertical 竖） |
+| `spacing`      | 子视图间距                           |
+| `distribution` | 尺寸分配（`FillEqually` = 等宽均分）      |
+| `alignment`    | 对齐方式                            |
 
 **为什么不用设宽？** `distribution = FillEqually` 会自动把 Stack 的宽度平均分给每个子视图。你只定 Stack 宽度，子视图宽度自动平分。
 
@@ -971,11 +975,11 @@ stack.distribution = UIStackViewDistributionFillEqually;  // 等宽
 
 ### 12.3 equalTo vs mas_equalTo
 
-| | `equalTo` | `mas_equalTo` |
-|---|---|---|
-| 本质 | 方法 | 宏（自动包装基本类型） |
-| 传对象（view、属性） | ✅ | ✅ |
-| 传数字（100） | ❌ 要写 `@(100)` | ✅ 直接写 `100` |
+|              | `equalTo`     | `mas_equalTo` |
+| ------------ | ------------- | ------------- |
+| 本质           | 方法            | 宏（自动包装基本类型）   |
+| 传对象（view、属性） | ✅             | ✅             |
+| 传数字（100）     | ❌ 要写 `@(100)` | ✅ 直接写 `100`   |
 
 **口诀：数字用 mas_equalTo，对象用 equalTo。**
 
@@ -990,11 +994,11 @@ make.width.mas_equalTo(150);       // 数字 → mas_equalTo
 
 UIImageView 的 `contentMode` 控制图片在"框"里怎么显示：
 
-| 模式 | 效果 |
-|---|---|
-| `ScaleAspectFit` | 等比缩放，**完整显示**，留白（最常用） |
-| `ScaleAspectFill` | 等比缩放，**填满框**，裁切（头像） |
-| `ScaleToFill` | 拉伸填满，**变形**（默认值，不推荐） |
+| 模式                | 效果                    |
+| ----------------- | --------------------- |
+| `ScaleAspectFit`  | 等比缩放，**完整显示**，留白（最常用） |
+| `ScaleAspectFill` | 等比缩放，**填满框**，裁切（头像）   |
+| `ScaleToFill`     | 拉伸填满，**变形**（默认值，不推荐）  |
 
 **默认是 ScaleToFill（会变形），所以建议显式设置。**
 
@@ -1024,10 +1028,10 @@ static DBManager *_instance = nil;   // 静态指针，初始指向空
 
 ### 13.3 类方法 vs 实例方法（单例的关键）
 
-| | 类方法（+） | 实例方法（-） |
-|---|---|---|
-| 调用者 | 类名 | 对象 |
-| 需要对象吗 | ❌ 不需要 | ✅ 需要 |
+|       | 类方法（+） | 实例方法（-） |
+| ----- | ------ | ------- |
+| 调用者   | 类名     | 对象      |
+| 需要对象吗 | ❌ 不需要  | ✅ 需要    |
 
 ```objc
 [DBManager sharedManager];   // 类方法，类名直接调
@@ -1063,11 +1067,11 @@ DBManager *b = [[DBManager alloc] init];   // 新对象！和 a 不是同一个
 
 **三个信号（命中任意一个）：**
 
-| 信号 | 例子 |
-|---|---|
-| 全局共享状态 | 登录用户、配置 |
+| 信号       | 例子         |
+| -------- | ---------- |
+| 全局共享状态   | 登录用户、配置    |
 | 资源昂贵只需一份 | 数据库连接、网络会话 |
-| 必须全局唯一 | 通知中心、文件管理 |
+| 必须全局唯一   | 通知中心、文件管理  |
 
 **系统自带的单例（你早用过了）：** `[NSNotificationCenter defaultCenter]`、`[NSUserDefaults standardUserDefaults]`、`[NSFileManager defaultManager]`、`[UIApplication sharedApplication]`——方法名都是"类方法返回唯一对象"，和 `sharedManager` 一样。
 
@@ -1107,11 +1111,11 @@ self.timer = nil;          // ② 清掉引用
 
 ### 15.1 三个类
 
-| | FMDatabase | FMDatabaseQueue | FMDatabasePool |
-|---|---|---|---|
-| 是什么 | 单连接 | 队列（串行） | 连接池（并行） |
-| 线程安全 | ❌ 不安全 | ✅ 安全 | ✅ 安全 |
-| 适用 | 简单单线程 | **大多数场景 ★** | 高并发 |
+|      | FMDatabase | FMDatabaseQueue | FMDatabasePool |
+| ---- | ---------- | --------------- | -------------- |
+| 是什么  | 单连接        | 队列（串行）          | 连接池（并行）        |
+| 线程安全 | ❌ 不安全      | ✅ 安全            | ✅ 安全           |
+| 适用   | 简单单线程      | **大多数场景 ★**     | 高并发            |
 
 **类比银行柜台：** FMDatabase = 一个柜台没人维持秩序；FMDatabaseQueue = 一个柜台排队；FMDatabasePool = 多个柜台同时服务。
 
@@ -1188,11 +1192,11 @@ contact.avatarPath ?: [NSNull null]
 
 ### 16.1 三种字符串拼接方法（怎么选）
 
-| 方法 | 用途 | 会处理斜杠吗 |
-|---|---|---|
-| `stringByAppendingString:` | 拼**普通字符串** | ❌ 不管斜杠 |
-| `stringWithFormat:` | 拼**带格式/数字** | ❌ 不管斜杠 |
-| `stringByAppendingPathComponent:` | 拼**文件路径** | ✅ 自动补/去斜杠 |
+| 方法                                | 用途          | 会处理斜杠吗    |
+| --------------------------------- | ----------- | --------- |
+| `stringByAppendingString:`        | 拼**普通字符串**  | ❌ 不管斜杠    |
+| `stringWithFormat:`               | 拼**带格式/数字** | ❌ 不管斜杠    |
+| `stringByAppendingPathComponent:` | 拼**文件路径**   | ✅ 自动补/去斜杠 |
 
 ```objc
 // ① 拼普通文字 → stringByAppendingString:
@@ -1294,12 +1298,12 @@ if (!cell) {   // 池里没有 → 第一次创建
 
 ### 17.4 系统 cell 四种样式
 
-| 样式 | 有哪些位置 |
-|---|---|
-| `Default` | 只有 textLabel（一行） |
+| 样式             | 有哪些位置                                         |
+| -------------- | --------------------------------------------- |
+| `Default`      | 只有 textLabel（一行）                              |
 | `Subtitle`（常用） | imageView + textLabel + detailTextLabel（上下两行） |
-| `Value1` | textLabel + detailTextLabel（左右） |
-| `Value2` | textLabel + detailTextLabel |
+| `Value1`       | textLabel + detailTextLabel（左右）               |
+| `Value2`       | textLabel + detailTextLabel                   |
 
 `Subtitle` 天生"图片 + 主标题 + 副标题"，正好放头像 + 名字 + 电话。**系统样式放不下（要按钮/开关/复杂布局）才自定义 cell。**
 
@@ -1345,11 +1349,11 @@ if (!cell) {   // 池里没有 → 第一次创建
 
 ### 17.8 数组删除方法
 
-| 方法 | 按什么删 |
-|---|---|
-| `removeObjectAtIndex:` | 按**下标**（位置，快又准） |
-| `removeObject:` | 按**对象**（内容，遍历比较，慢） |
-| `removeObjectsInArray:` | 按**数组**（批量） |
+| 方法                      | 按什么删               |
+| ----------------------- | ------------------ |
+| `removeObjectAtIndex:`  | 按**下标**（位置，快又准）    |
+| `removeObject:`         | 按**对象**（内容，遍历比较，慢） |
+| `removeObjectsInArray:` | 按**数组**（批量）        |
 
 **有准确位置（行号）就用 `removeObjectAtIndex:`**；只知道"删掉某个对象"才用 `removeObject:`。
 
@@ -1364,10 +1368,10 @@ if (!cell) {   // 池里没有 → 第一次创建
 
 ### 17.10 barButtonItem 单复数
 
-| 属性 | 放几个 | 类型 |
-|---|---|---|
-| `rightBarButtonItem`（单数） | 1 个 | `UIBarButtonItem *` |
-| `rightBarButtonItems`（复数） | 多个 | `NSArray`（第一个显示在最右） |
+| 属性                        | 放几个 | 类型                  |
+| ------------------------- | --- | ------------------- |
+| `rightBarButtonItem`（单数）  | 1 个 | `UIBarButtonItem *` |
+| `rightBarButtonItems`（复数） | 多个  | `NSArray`（第一个显示在最右） |
 
 ---
 
@@ -1375,10 +1379,10 @@ if (!cell) {   // 池里没有 → 第一次创建
 
 ### 18.1 executeQuery vs executeUpdate
 
-| 方法 | 对应 SQL | 返回 |
-|---|---|---|
-| `executeUpdate:` | INSERT/DELETE/UPDATE/CREATE | `BOOL`（成没成） |
-| `executeQuery:` | SELECT | `FMResultSet`（结果集） |
+| 方法               | 对应 SQL                      | 返回                 |
+| ---------------- | --------------------------- | ------------------ |
+| `executeUpdate:` | INSERT/DELETE/UPDATE/CREATE | `BOOL`（成没成）        |
+| `executeQuery:`  | SELECT                      | `FMResultSet`（结果集） |
 
 增删改问"成没成"，查询问"有哪些数据"。
 
@@ -1399,13 +1403,13 @@ while ([rs next]) {   // 游标下移一行 + 返回"还有没有"（BOOL）
 
 **规律：要转成什么类型，就用对应方法。**
 
-| 方法 | 转成 |
-|---|---|
-| `intForColumn:` | int |
-| `longForColumn:` | long / NSInteger |
-| `doubleForColumn:` | double |
-| `stringForColumn:` | NSString |
-| `boolForColumn:` | BOOL |
+| 方法                 | 转成               |
+| ------------------ | ---------------- |
+| `intForColumn:`    | int              |
+| `longForColumn:`   | long / NSInteger |
+| `doubleForColumn:` | double           |
+| `stringForColumn:` | NSString         |
+| `boolForColumn:`   | BOOL             |
 
 两种定位：`xxxForColumn:`（用**列名**，可读性好，平时用这个）/ `xxxForColumnIndex:`（用**列序号** 0 起，结果没列名时用）。
 
@@ -1460,19 +1464,57 @@ self.phoneField.keyboardType = UIKeyboardTypeNumberPad;      // 数字键盘（�
 
 ### 19.3 相册选择（UIImagePickerController）
 
-```objc
-UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;  // 从相册选
-picker.delegate = self;                                             // 选完回调给谁
-[self presentViewController:picker animated:YES completion:nil];     // 弹出相册
+> **UIImagePickerController = 系统自带的"选图弹窗"，帮你弹出相册/相机，让用户选一张照片或拍一张，再通过代理把结果交给你。** 你不用自己写相册界面。
 
-// 选完回调（delegate 方法）
+```objc
+// ① 创建 picker 对象
+UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+
+// ② 设定图片来源（sourceType）
+picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;  // 从相册选
+//    其他选项：Camera（相机拍摄）/ SavedPhotosAlbum（仅最近照片）
+
+// ③ 设置代理：选完图回调给谁（给 self 处理）
+picker.delegate = self;
+
+// ④ 弹出来（把 picker 这个控制器作为弹出层显示到屏幕）
+[self presentViewController:picker animated:YES completion:nil];
+
+// ⑤ 选完回调（delegate/代理方法）
 - (void)imagePickerController:(UIImagePickerController *)picker
     didFinishPickingMediaWithInfo:(NSDictionary *)info {
     UIImage *image = info[UIImagePickerControllerOriginalImage];   // 取出选中的图
     [picker dismissViewControllerAnimated:YES completion:nil];      // 关掉相册
 }
 ```
+
+#### 三个最容易混的点（重点）
+
+**① `picker.delegate = self` 不是"自己代理自己"，是 picker 委托 self。**
+picker 只负责"弹窗 + 用户选"；选完图，picker **回调给 self**，由 self 处理图片。代码里 self 既创建了 picker、又当它代理，但"收图处理"的活是 self 干的。
+
+**② 代理方法不是 picker"自己"的方法，是协议定义的、由 self 实现。**
+```objc
+@interface ContactEditViewController () <UIImagePickerControllerDelegate, ...>
+// ↑ 承诺实现协议方法
+picker.delegate = self;
+// ↑ 兑现承诺：picker 选完图调用 self 的方法
+```
+这就是**代理模式**：picker 是委托方（只负责"提醒"，调用代理方法把 info 递过来），self 是代理方（真正处理图片）。
+
+**③ present 弹 picker 跟 sourceType 没关系。**
+- `sourceType` = 决定 **picker 里面装的是什么**（相册列表 还是 相机）
+- `presentViewController:picker` = 决定 **把它整个弹到屏幕上**
+- 写 picker 是因为"要弹出的对象就是 picker"，不是因为 sourceType。
+
+#### 取图 key 固定写法
+
+```objc
+info[UIImagePickerControllerOriginalImage]   // 原始图片（最常用）
+info[UIImagePickerControllerEditedImage]     // 裁剪后图片（若允许编辑）
+```
+
+> **一句话记忆：创建 picker → 设来源（相册/相机）→ 设代理 → present 弹出 → 代理方法里用固定的 key 取图。**
 
 ### 19.4 图片存沙盒
 
@@ -1482,6 +1524,441 @@ picker.delegate = self;                                             // 选完回
 // ② writeToFile:atomically:：数据写入文件（真正落盘，atomically = 原子写入防损坏）
 ```
 
+### 19.5 完整闭环：选图 → 存路径 → 入库 → 读图
+
+> **核心设计：图片不直接存数据库，只存"路径字符串"，用的时候按路径从本地读文件。** 因为数据库/对象存不了大图片。
+
+**完整链路（从头到尾）：**
+
+```
+用户点头像
+  → 创建 picker（相册）→ present 弹出
+  → 用户选图 → 点"完成/使用"按钮（不是单击图就触发！）
+  → picker 自动调 self 的代理方法 didFinishPickingMediaWithInfo:
+     → 从 info[OriginalImage] 取出 UIImage（原始图）
+     → 显示到头像框
+     → saveImage: 存沙盒 → 得到路径 avatarPath
+  → 保存联系人：avatarPath 存进数据库
+  → 下次列表页：从数据库取 avatarPath → 按路径读图 → 显示
+```
+
+**① 选图（代理方法，用户点"完成"才触发）**
+
+```objc
+- (void)imagePickerController:(UIImagePickerController *)picker
+    didFinishPickingMediaWithInfo:(NSDictionary *)info {
+    UIImage *image = info[UIImagePickerControllerOriginalImage];  // 从 info 拆出原始图
+    self.avatarView.image = image;                                // 显示到头像框
+    self.selectedAvatarPath = [self saveImage:image];             // 存沙盒拿路径
+    [picker dismissViewControllerAnimated:YES completion:nil];    // 关相册
+}
+```
+
+**为什么接收 picker 和 info，不直接传图片？**
+
+| 参数 | 是什么 | 干嘛用 |
+|---|---|---|
+| `picker` | 触发回调的那个 picker | 识别/关掉它（`[picker dismiss...]`） |
+| `info` | 装着图片等一堆信息的**字典** | 用固定 key 拆：`info[OriginalImage]` |
+
+> 系统把原始图、编辑图、媒体类型等打包成字典，**图片在 info 里，用固定 key 取**，不是直接传图片对象。
+
+**② 存沙盒（UIImage → PNG 数据 → 写文件 → 返回路径）**
+
+```objc
+- (NSString *)saveImage:(UIImage *)image {
+    NSString *docPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *fileName = [NSString stringWithFormat:@"avatar_%ld.png", (long)[[NSDate date] timeIntervalSince1970]];  // 时间戳防重名
+    NSString *filePath = [docPath stringByAppendingPathComponent:fileName];
+    [UIImagePNGRepresentation(image) writeToFile:filePath atomically:YES];   // 图片写成文件
+    return filePath;   // 拿到文件路径
+}
+```
+
+**③ 存数据库（只存路径）**
+
+```objc
+c.avatarPath = self.selectedAvatarPath;                 // 把路径字符串存进对象
+[[DBManager sharedManager] insertContact:c];            // insert/update 只把路径写进库
+```
+
+**④ 下次读图（从数据库取路径 → 按路径读本地文件）**
+
+```objc
+if (c.avatarPath) {                                    // 从数据库取出的路径
+    cell.imageView.image = [UIImage imageWithContentsOfFile:c.avatarPath];   // 按路径从本地读文件显示
+} else {
+    cell.imageView.image = [UIImage imageNamed:@"默认头像"];  // 没路径 → 默认头像
+}
+```
+
+> **一句话记忆：图片存文件（沙盒），数据库只记文件路径，用的时候 imageWithContentsOfFile 按路径读回来。**
+
 ---
 
-*最后更新：2026-08-14*
+## 二十、分类里方法能不能带参数
+
+> **能。** 分类里的方法和普通方法一样，参数完全自由。要不要参数由**功能**决定，跟"在不在分类里"无关。
+
+之前看的分类例子没参数（如 `containsDigit`），是因为那些方法只靠 `self` 就能判断（比如"自己有没有数字"），不需要外部传值。
+
+```objc
+@interface NSString (fz)
+- (BOOL)containsString:(NSString *)str;   // 判断"是否包含某子串"，必须传参数
+@end
+
+@implementation NSString (fz)
+- (BOOL)containsString:(NSString *)str {
+    return [self rangeOfString:str].location != NSNotFound;
+}
+@end
+```
+
+| 方法                | 参数 | 为什么                 |
+| ----------------- | -- | ------------------- |
+| `containsDigit`   | 无  | 判断自己有没有数字，无需外部输入    |
+| `containsString:` | 有  | 判断有没有包含 XX，需要外部传 XX |
+
+> **判断标准：这方法需不需要外部给它数据？需要就带参，不需要就不带。与是否分类无关。**
+
+---
+
+## 二十一、NSTimer 销毁：invalidate 不会自动清零【深度】
+
+**先把两个动作分清楚——"停止"和"清零"是两件事：**
+
+```objc
+[self.timer invalidate];   // ① 停止：计时器失效、不再触发
+self.timer = nil;          // ② 清零：指针清空，变成 nil
+```
+
+### 关键：invalidate 不会自动清零
+
+```objc
+[self.timer invalidate];
+// 执行完这行：计时器停了（失效了）
+// 但 self.timer 这个指针，还指向那个已失效的 timer 对象！没有变成 nil
+
+self.timer = nil;
+// 执行完这行：指针才被清空，self.timer 变成 nil ✅
+```
+
+| 代码                        | 干什么       | 谁变 nil 了         |
+| ------------------------- | --------- | ---------------- |
+| `[self.timer invalidate]` | 停止计时器（作废） | ❌ 没有，指针还指向它      |
+| `self.timer = nil`        | 清空指针      | ✅ timer 属性变成 nil |
+
+**为什么 invalidate 不能清零？** 因为 `invalidate` 是 timer 对象的方法，它管不到"外面指向它的指针"。你关掉了闹钟，但遥控器（`self.timer`指针）还在手里。
+
+### 为什么只 invalidate 不置 nil 会出错
+
+```objc
+[self.timer invalidate];   // 只停止
+// self.timer 还指向那个已失效的对象 → 若判断 if (self.timer) 它是非 nil
+// 就会误以为计时器还在跑 → 逻辑出错
+```
+
+> **类比：timer 对象 = 闹钟，`self.timer` 指针 = 遥控器。`invalidate` = 关闹钟（闹钟停），`self.timer = nil` = 扔遥控器。关闹钟后遥控器还在手，必须主动扔。**
+>
+> **口诀：先 `invalidate` 停止，再 `置 nil` 清零，两步一起，缺一不可。**
+
+---
+
+## 二十二、通知销毁：dealloc vs viewWillDisappear【深度】
+
+### 核心判断标准：会不会循环引用 → dealloc 会不会被调用
+
+|               | NSTimer                | 通知（NSNotificationCenter） |
+| ------------- | ---------------------- | ------------------------ |
+| 对 self 的引用    | target **强引用**         | observer **弱引用**(iOS9+)  |
+| 会循环引用吗        | ✅ 会                    | ❌ 不会                     |
+| dealloc 会被调用吗 | ❌ 不会（循环引用）             | ✅ 会（正常释放）                |
+| 清理放哪          | 必须 `viewWillDisappear` | `dealloc` 就行             |
+
+**通知**：`addObserver` 弱引用 observer，不会形成 `VC ↔ 通知中心` 的循环引用，VC 能正常释放，dealloc 正常调。所以通知**可以**在 dealloc 移除：
+
+```objc
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];   // ✅ 通知这么写没问题
+}
+```
+
+**计时器**：`timer.target` 强引用 VC → 循环引用 → VC 无法释放 → dealloc 不被调用 → 放 dealloc 是死代码。所以计时器必须放 `viewWillDisappear`：
+
+```objc
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [self.timer invalidate];
+    self.timer = nil;
+}
+```
+
+### dealloc vs viewWillDisappear 怎么选
+
+| 写法                     | 含义             | 适用场景               |
+| ---------------------- | -------------- | ------------------ |
+| `dealloc` 移除           | 对象**销毁时**才停止监听 | 整个生命周期都要接收（登录状态变化） |
+| `viewWillDisappear` 移除 | 页面**一消失**就停止监听 | 只在显示期间接收（键盘弹出）     |
+
+> **口诀：会循环引用导致 dealloc 不调 → 放 viewWillDisappear；不会循环引用 → 放 dealloc。**
+>
+> 全局事件用 dealloc，页面相关事件用 viewWillDisappear。
+
+---
+
+## 二十三、NSNotification 体系：那 4 个类【骨架】
+
+> Xcode 补全里 `NSNotification` 的 4 个角色。
+
+| 类型                       | 是什么   | 作用              | 常用度     |
+| ------------------------ | ----- | --------------- | ------- |
+| **NSNotificationCenter** | 广播站   | 发/收通知           | ⭐⭐⭐ 天天用 |
+| **NSNotification**       | 一条通知  | 回调参数，含名称+数据     | ⭐⭐      |
+| **NSNotificationName**   | 通知名类型 | 本质是 NSString 别名 | ⭐⭐⭐     |
+| **NSNotificationQueue**  | 通知队列  | 延迟/异步派发         | ⭐ 忽略    |
+
+### defaultCenter 的三组方法（发/收/移）
+
+```objc
+// 发
+[[NSNotificationCenter defaultCenter] postNotificationName:@"xxx" object:nil];
+
+// 收（selector 版，最常用）
+[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handle:) name:@"xxx" object:nil];
+
+// 收（block 版，少用）
+addObserverForName:object:queue:usingBlock:
+
+// 移
+[[NSNotificationCenter defaultCenter] removeObserver:self];                       // 全移
+[[NSNotificationCenter defaultCenter] removeObserver:self name:@"xxx" object:nil]; // 精确移
+```
+
+> **一句话：日常只用 `defaultCenter` + 发/收/移。回调收到的是 NSNotification（消息体），Name 是字符串，Queue 忽略。**
+
+---
+
+## 二十四、字符串/数组/字典：初始化、赋值、输出【骨架】
+
+> **字面量三兄弟：字符串 `@"..."`、数组 `@[...]`、字典 `@{key:value}`。**
+
+|         | 初始化（字面量）       | 赋值                      | 输出      |
+| ------- | -------------- | ----------------------- | ------- |
+| **字符串** | `@"hello"`     | `str = @"new"`（换指向）     | `%@`    |
+| **数组**  | `@[@1,@2]`     | 可变用 `addObject:`        | `%@` 整串 |
+| **字典**  | `@{@"k":@"v"}` | 可变用 `setObject:forKey:` | `%@` 整串 |
+
+### 三个坑
+
+```objc
+// ① 不可变不能增删
+NSArray *a = @[@1,@2];
+[a addObject:@3];   // ❌ NSArray 不能增删，要用 NSMutableArray
+
+// ② 字典取不到值是 nil
+id v = dict[@"不存在的键"];   // v = nil，不崩，要用 objectForKey: 判断
+
+// ③ 下标访问是"第几个元素"，不是字节
+arr[0]   // 第 0 个元素
+```
+
+> **要增删改用可变版本（NSMutableArray / NSMutableDictionary），输出统一 `%@`。**
+
+---
+
+## 二十五、六大概念默写 + 多态/代理/类扩展【骨架】
+
+> 考核默写专用，每个只留骨架 + 最容易卡的点。
+
+### 25.1 Block（最卡：`^` 后面跟名字还是空）
+
+**`^` 后永远不跟名字，跟的一定是 `(参数)` 或 `{`。名字只出现在"给它起变量名"时。**
+
+```objc
+// 定义变量：名字在类型里
+int (^myBlock)(int a) = ^(int a) { return a * 2; };
+
+// 作为方法参数：类型无名字
+- (void)do:(void (^)(int))completion {
+    completion(10);
+}
+[self do:^(int a) { NSLog(@"%d", a); }];   // 传值时名字不写
+```
+
+### 25.2 继承
+
+```objc
+@interface Animal : NSObject   // : 父类
+- (void)eat;
+@end
+@interface Dog : Animal        // 子类继承父类
+- (void)bark;
+@end
+// 重写父类方法：[super eat]; 再写自己的
+```
+
+### 25.3 分类（Category）
+
+```objc
+@interface NSString (fz)   // (分类名) 给已有类加方法
+- (BOOL)containsDigit;
+@end
+```
+
+### 25.4 协议（Protocol）
+
+```objc
+@protocol MyDelegate <NSObject>   // 合同
+- (void)didSomething;             // 必须实现
+@optional
+- (void)optionalMethod;           // 可选
+@end
+@interface MyClass : NSObject <MyDelegate> @end   // 遵守协议
+```
+
+### 25.5 通知
+
+```objc
+// 发
+[[NSNotificationCenter defaultCenter] postNotificationName:@"N" object:nil];
+// 收
+addObserver:selector:name:object:
+// 移（dealloc 必做）
+removeObserver:self;
+```
+
+### 25.6 代理（Delegate）
+
+```objc
+@protocol MyDelegate <NSObject>
+- (void)didTap;
+@end
+@property (nonatomic, weak) id<MyDelegate> delegate;   // weak 防循环引用
+if ([self.delegate respondsToSelector:@selector(didTap)]) {   // 判断已实现
+    [self.delegate didTap];
+}
+```
+
+### 25.7 多态【骨架】
+
+> **口诀：看实际类型，不看指针声明类型。**
+
+```objc
+Animal *a = [[Dog alloc] init];   // 指针声明 Animal，实际是 Dog
+[a eat];                          // 调 Dog 的版本（运行时动态绑定）
+// 传不同对象 → 运行时找对应方法
+```
+
+### 25.8 类扩展【骨架】
+
+> **口诀：.m 里的匿名分类（括号空），声明私有属性/方法。**
+
+```objc
+@interface MyClass ()              // () 空括号 = 类扩展
+@property (nonatomic, strong) NSString *privateName;   // 私有
+@end
+// 与分类区别：分类 (名) 在 .h 加公开方法；类扩展 () 在 .m 声明私有
+```
+
+---
+
+## 二十六、通讯录程序回顾·难点澄清
+
+> 通讯录整体代码在 `通讯录程序.md`。这里只补回顾时追问出来的、课本上没有明说的关键点。
+
+### 26.1 沙盒路径写法固定，`contact.db` 文件名自己起
+
+**① 找沙盒路径是固定写法**（换个常量就能找不同目录）：
+
+```objc
+[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+//                                    ↑ 换第一个参数即可切换目录
+// NSDocumentDirectory = Documents（持久数据）；NSCachesDirectory = 缓存；tmp 用 NSTemporaryDirectory
+// 返回数组，firstObject 拿第一个；返回的是绝对路径，跟程序名无关
+```
+
+**② `.db` 扩展名是自己起的，不是固定规则：**
+
+```objc
+NSString *dbPath = [docPath stringByAppendingPathComponent:@"contact.db"];
+//                                                  ↑ contact 自己起名
+// 也可以叫 mymoney.sqlite / xxx.data —— SQLite 不看后缀，能打开就行
+// 真正固定的是"前面的沙盒目录写法"，后面文件名 100% 自己定
+```
+
+### 26.2 FMDB 三层执行链：连接 → 队列 → block → SQL
+
+**完整链（重点，最容易晕）：**
+
+```
+① 建连接（一次）：_queue = [FMDatabaseQueue databaseQueueWithPath:dbPath];
+                                    ↑ 打开/创建数据库文件，建立连接，存进 _queue
+② 后续每次操作：[_queue inDatabase:^(FMDatabase *db) { ... }];
+                                    ↑ inDatabase 是"管家"：排队 + 把连接 db 递给你 + 用完归还
+③ block 里：db 是管家递来的连接，真正干活
+   [db executeUpdate:sql];  ← executeUpdate 才是真正执行 SQL
+```
+
+| 角色 | 是什么 | 干啥 |
+|---|---|---|
+| `_queue` | 数据库队列（入口） | 建立连接、排队、借出/收回 db |
+| `inDatabase:` | 管家方法 | 把 db 递给你，block 执行完自动归还 |
+| block | 待办清单 | 你在里面写 SQL 逻辑 |
+| `db` | 实际连接 | 真正操作数据库（executeUpdate/executeQuery） |
+| `executeUpdate:` | 执行增删改建表 | 返回 BOOL |
+
+**执行顺序**：`init → createTable → inDatabase:(block) → block 里 executeUpdate:建表sql`，一层套一层。**必须先有连接（databaseQueueWithPath:），才能用它建表/操作。**
+
+**executeUpdate vs executeQuery**：增删改/建表用 `executeUpdate:`（返回 BOOL）；查询 SELECT 用 `executeQuery:`（返回结果集）。
+
+### 26.3 `{ }` 私有变量 vs @property 怎么选
+
+```objc
+@implementation DBManager {
+    FMDatabaseQueue *_queue;   // { } = 私有成员变量，不自动生成 getter/setter
+}
+```
+
+| 写法 | 可见性 | 生成 getter/setter? | 用在哪 |
+|---|---|---|---|
+| `@property`（.h） | 公开 | ✅ | 对外暴露的属性（Contact.name） |
+| `@property`（.m 类扩展） | 私有 | ✅ | 本类私有但方便 self.xxx 访问 |
+| `{ }` ivars（.m） | 私有 | ❌ | 纯内部工具，直接 `_queue` 访问 |
+
+**选择标准**：`_queue` 是内部实现细节，不需要对外暴露、也不需要 getter/setter → 用 `{ }` 更克制干净。跟"哪个能存数据"无关，两者都能存，选"哪个更合适"。
+
+### 26.4 本地删数据三处 vs 网络删数据一处
+
+| | 网络删除 | 本地数据库删除 |
+|---|---|---|
+| 数据在哪 | **只有服务器一处**（单一真源） | 数据库 + 内存数组 + 界面 **三处** |
+| 删哪里 | 删服务器就够 | 必须**三处都删** |
+| 为什么 | 唯一真源，删完就没 | 三份独立拷贝，互不自动同步 |
+
+**删三处代码（缺一不可）：**
+
+```objc
+[[DBManager sharedManager] deleteContact:c.contactId];   // ① 删数据库（永久源）
+[self.contacts removeObjectAtIndex:indexPath.row];       // ② 删内存数组
+[tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];  // ③ 删界面一行（带动画）
+```
+
+关键：TableView 显示的是内存数组 `self.contacts`，不是直接读数据库。只删数据库，数组和界面不会跟着变。所以必须三处同步删；删完用 `viewWillAppear` 重新读库兜底刷新。
+
+### 26.5 数组不强制声明元素类型
+
+```objc
+@property (nonatomic, strong) NSMutableArray *contacts;          // 没写元素类型，也能跑
+@property (nonatomic, strong) NSMutableArray<Contact *> *contacts;  // 推荐：写明装 Contact
+```
+
+**OC 数组内置"任何对象都能装"（id）**，所以不写类型也合法。但这是隐患：里面装错类型编译期发现不了，运行时一调方法才崩。
+
+- 加 `<Contact *>` 是**可选**（iOS9+ 轻量泛型）：可读性 + 编译期提示
+- 但**运行时不会强制拦**（跟 Java/C++ 的强泛型不同）
+- **推荐写法**：`NSMutableArray<Contact *> *` 明确约定，减少出错
+
+---
+
+*最后更新：2026-08-18*
+
