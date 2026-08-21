@@ -22,8 +22,8 @@
 
 @interface DisplayView : UIView
 
-@property (nonatomic, strong) UIImage *image;
-@property (nonatomic, copy)   NSString *text;
+@property (nonatomic, strong, nullable) UIImage *image;
+@property (nonatomic, copy,   nullable) NSString *text;
 
 /// 内部 UIImageView（公开只读）——SDWebImage 下载必须对着 UIImageView 调
 @property (nonatomic, strong, readonly) UIImageView *imageView;

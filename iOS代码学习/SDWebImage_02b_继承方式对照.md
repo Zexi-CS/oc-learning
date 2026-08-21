@@ -16,12 +16,11 @@
 
 @interface DisplayView : UIView
 
-@property (nonatomic, strong) UIImage *image;
-@property (nonatomic, copy)   NSString *text;
+// nullable：允许赋 nil（prepareForReuse 里清空用 = nil 才不会警告）
+@property (nonatomic, strong, nullable) UIImage *image;
+@property (nonatomic, copy,   nullable) NSString *text;
 
 /// 内部 UIImageView（公开只读，供 SDWebImage 下载用）
-/// 因为 SDWebImage 的 sd_setImageWithURL: 必须对着 UIImageView 调，
-/// 而 _imageView 原本是私有的，所以暴露出来给外面（如 ImageCell）拿去做下载
 @property (nonatomic, strong, readonly) UIImageView *imageView;
 
 @end
