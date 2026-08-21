@@ -19,6 +19,11 @@
 @property (nonatomic, strong) UIImage *image;
 @property (nonatomic, copy)   NSString *text;
 
+/// 内部 UIImageView（公开只读，供 SDWebImage 下载用）
+/// 因为 SDWebImage 的 sd_setImageWithURL: 必须对着 UIImageView 调，
+/// 而 _imageView 原本是私有的，所以暴露出来给外面（如 ImageCell）拿去做下载
+@property (nonatomic, strong, readonly) UIImageView *imageView;
+
 @end
 ```
 
@@ -38,7 +43,9 @@
 
 @interface DisplayView ()
 
-@property (nonatomic, strong) UIImageView *imageView;  // 内部 UIImageView
+// .h 里声明了 readonly imageView，类扩展里用 readwrite 覆盖（允许内部写、外部只读）
+// 这样外部能拿 _imageView 做 SDWebImage 下载，但改不了属主
+@property (nonatomic, strong, readwrite) UIImageView *imageView;  // 内部 UIImageView
 @property (nonatomic, strong) UILabel     *textLabel;   // 内部 UILabel
 
 @end
