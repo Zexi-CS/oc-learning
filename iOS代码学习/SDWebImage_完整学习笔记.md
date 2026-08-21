@@ -991,3 +991,151 @@ box.image = 图片
 | 复用子视图 | 不用管，init 只跑一次 | 懒加载 `if (!iv)` 保证只创建一次 |
 
 **核心不变：** 都是"存一张图 → 创建 UIImageView → 把图设上去"，只是"存"和"创建"的方式换了写法。
+
+---
+
+## 十六、继承版"雇零件"模型（2026-08-21 深入）
+
+> 用"雇零件"比喻彻底理解继承版：UIView 本身不会显示图片/文字，靠"雇"一个 UIImageView 装图、一个 UILabel 装字。
+
+### 16.1 核心一句话
+
+**DisplayView 自己是 UIView，它"不是"也"变不成" UIImageView/UILabel，它只是在自己身体里创建了这两个控件当"零件"。**
+
+```
+DisplayView（一个 UIView）
+   ├── 内部：UIImageView（装图片）    ← 零件1
+   ├── 内部：UILabel（装文字）        ← 零件2
+   └── 对外接口：
+       - image 属性 → 设了就把图转发给 UIImageView
+       - text 属性 → 设了就把字转发给 UILabel
+```
+
+外部以为 `view.image = 图` 是直接给 UIView 设图，其实内部偷偷转发给了零件。
+
+### 16.2 为什么 UI 层是 3 层，不是 4 层
+
+**陷阱**：容易以为"屏幕 → 一个普通 UIView → UIImageView → image"是 4 层。
+
+**正确是 3 层**：DisplayView **自己就是**那个 UIView，不需要再套一层普通 UIView 当容器。
+
+```
+✅ 正确（3 层）：
+   屏幕 self.view
+     ↓ addSubview
+   DisplayView（本身就是 UIView，带位置 80×80）
+     ↓ 初始化时内部 addSubview
+   UIImageView（铺满 DisplayView，make.edges.equalTo）
+     → image 内容显示在 UIImageView 上（内容是内容，不是"层"）
+
+❌ 错误（4 层，多套了一层普通 UIView）：
+   self.view → UIView a → UIImageView → image
+```
+
+**关键**：DisplayView 凭继承天生是 UIView，自己就当容器，无需额外包一层普通 UIView。
+
+### 16.3 "雇零件"对比继承版和分类版
+
+| | 继承版（02b） | 分类版（02） |
+|------|-------------|-------------|
+| 外壳 | 自定义 `DisplayView : UIView` | 直接用系统 `UIView` |
+| 加能力的路 | 新建 UIView 子类，子类里写 image/text | 给 UIView 加分类，任何 UIView 都有 |
+| 零件 | imageView / textLabel | displayImageView / displayTextLabel |
+| 底层本质 | 相同：外壳 + 两个内部零件 + 两个转发接口 |
+
+**逻辑、原因、原理一句话**：UIView 不会显示图和字。想做"又能看图又能看字"的控件，就雇一个 UIImageView 装图、雇一个 UILabel 装字，装进 UIView 外壳。继承版自造子类当外壳，分类版直接改造 UIView 当外壳。
+
+---
+
+## 十七、对象初始化铁律（2026-08-21）
+
+> 解决"为什么重写 initWithFrame""为什么必须先 super init""为什么 image=照片就能显示"这三个卡点。
+
+### 17.1 为什么重写 initWithFrame 而不是 init？
+
+**init 内部底层会调 initWithFrame:**
+
+```objc
+// UIView 内置：
+- (id)init {
+    return [self initWithFrame:CGRectZero];   // init = 拿 CGRectZero 去调 initWithFrame
+}
+```
+
+所以不管外部入口是 `[[DisplayView alloc] init]` 还是 `initWithFrame:`，**最终都汇聚到 initWithFrame**。重写它是安全的，因为创建时总会执行到你重写的代码。
+
+### 17.2 为什么子类初始化必须先 super.init？不写父类就创建不了对象
+
+**对象 = 父类部分 + 子类部分，两层。**
+
+```
+房子比喻：
+  UIView = 房子骨架（地基、墙、屋顶）→ 基础
+  DisplayView = 在骨架上加特定装修（加相框 imageView）
+  必须先盖地基（super init），才能在上面装修（子类加东西）
+```
+
+```objc
+- (id)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];  // ① 先造父类 UIView 那"地基"
+    if (self) {                          // ② super 返回非空 = 父类部分 OK
+        _imageView = ...;                // ③ 再装修：加自己的小屏幕
+    }
+    return self;
+}
+```
+
+**不写 `self = [super init...]`，self 未定义，子类部分无从安放，对象创建不了（或创建出来是坏的）。**
+
+### 17.3 为什么 `box.image = 照片` 就能显示？和 setImage 什么关系？
+
+**`box.image = x` 不是普通变量赋值，是方法调用。**
+
+```objc
+box.image = 照片;
+// 编译器翻译成：
+[box setImage:照片];   // 调 setImage: 方法
+```
+
+**显示发生在 setImage: 内部**，通过 `_imageView.image = image` 这一行把照片放进小屏幕：
+
+```objc
+- (void)setImage:(UIImage *)image {   // 被 box.image= 触发
+    _image = image;              // ① 存到存储格子
+    _imageView.image = image;    // ② 真正把照片设进小屏幕 → 显示！
+    _imageView.hidden = NO;
+}
+```
+
+### 17.4 `_image`（存储） vs `_imageView.image`（屏幕） vs `.image`（门口）
+
+| 名字 | 本质 | 谁碰 |
+|------|------|------|
+| `.image` | 公开属性（对外门） | 外部 `box.image = x` / `box.image` |
+| `_image` | 内部存储格子，记"现在是什么图" | setter/getter 内部 |
+| `_imageView.image` | 真正画到屏幕 | 显示用 |
+
+```
+box.image = 照片
+   ↓ 门口进
+setImage: 方法里分两路：
+   _image = 照片      → 记住（存）
+   _imageView.image = 照片 → 显示（画）
+```
+
+### 17.5 nullable 与 = nil 清空（消警告）
+
+`image`/`text` 声明加 `nullable`，`prepareForReuse` 里 `= nil` 才不警告：
+
+```objc
+@property (nonatomic, strong, nullable) UIImage *image;
+@property (nonatomic, copy,   nullable) NSString *text;
+```
+
+- `nil` 是 OC 合法空指针，对 nil 发消息安全（OC 不崩，返回 nil/0）
+- `= nil` 清空 = 让 setter 走 else 分支隐藏零件，是复用前擦黑板的正确写法
+- 若属性标 nonnull，`= nil` 会警告"null passed to callee that requires non-null"
+
+### 17.6 断点续传可删
+
+不需要断点续传时，`downloadResumeData` 属性和 `error.userInfo[NSURLSessionDownloadTaskResumeData]` 那行可删，不影响正常下载。
