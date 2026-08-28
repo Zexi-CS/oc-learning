@@ -617,6 +617,30 @@ NetworkManager.shared.fetchUsers { [weak self] success, result, _ in
 | `func tableView(_ tableView:...)` | 省略该参数的外部标签（协议签名要求） |
 | 闭包 `{ _ , _ , completion in }` | 忽略该参数（不用就 _ 占位） |
 
+### 9.3b 闭包下划线占位：_ 占位 vs 全部写名的区别（08-28 补充）
+
+**`_` 是在"写闭包定义、列参数"时用的，不是在"调用时"用。**
+
+```swift
+// 定义闭包时决定：哪些参数不关心、用 _ 占位
+{ [weak self] _, _, completion in
+    completion(true)
+}
+```
+
+**`_` 占位 vs 把参数全部写出来，两者都能正常跑**，区别：
+
+| 写法 | 结果 |
+|------|------|
+| `{ action, sourceView, completion in ... }`（写了但不用） | 能跑，但产生"未使用参数"警告 |
+| `{ _, _, completion in ... }`（用 _ 占位） | 能跑，无警告，语义清晰"故意不用" |
+
+**判断标准：这个闭包提供的参数，你用不用？**
+- 要用 → 起个名字（如 `completion`）
+- 不用 → `_` 占位（不要起没用的名字）
+
+**注意**：`_` 占位是"定义闭包时声明忽略"，不是"调用时做占位"。你写 `{ _, _, completion in }` 的那一行就是在定义闭包、标注忽略前两个参数。
+
 ### 9.4 可选链 self?.fetchUsers()
 
 - `self?.xxx()` = **可选链**：self 非 nil 才执行，nil 整条跳过不崩
