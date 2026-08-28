@@ -97,11 +97,16 @@ class UserListViewController: UIViewController {
     private func showEditAlert(title: String, user: User?) {
         let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
 
-        // 两个输入框（编辑时预填当前值）
-        alert.addTextField { tf in tf.placeholder = "姓名" }
+        // 姓名输入框：新增显示占位，编辑预填当前名字
+        alert.addTextField { tf in
+            tf.placeholder = "姓名"
+            if let u = user { tf.text = u.name }   // 编辑：预填名字
+        }
+        // 年龄输入框：新增显示占位，编辑预填当前年龄
         alert.addTextField { tf in
             tf.placeholder = "年龄"
             tf.keyboardType = .numberPad
+            if let u = user { tf.text = u.age }    // 编辑：预填年龄
         }
 
         // 取消
