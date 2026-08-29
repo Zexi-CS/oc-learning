@@ -16,12 +16,16 @@
 │  李四              30岁           │
 │  ...                              │
 └───────────────────────────────────┘
+┌───────────────────────────────────┐
+│         [ 下载文件 ]              │  ← 底部按钮
+└───────────────────────────────────┘
    交互：
    - 右上角 + → 弹窗输姓名年龄 → 新增
    - 左滑 → 编辑 / 删除
+   - 底部"下载文件"按钮 → 下载 → 控制台打印进度和结果
 ```
 
-和你 OC 的 06 一模一样，只是 Swift 语法。
+和你 OC 的 06 一模一样，只是 Swift 语法。底部下载按钮对应 OC 简易版（进度用 NSLog，不含进度条）。
 
 ---
 
@@ -36,6 +40,7 @@ class UserListViewController: UIViewController {
     // ═══ 属性 ═══
     private var users: [User] = []                          // 数据源（对应 OC 的 _users）
     private let tableView = UITableView(frame: .zero, style: .plain)   // 表格
+    private let downloadButton = UIButton(type: .system)    // 底部下载按钮（对应 OC 的 downloadButton）
 
     // ════════════════════════════════════════════════════════
     // 生命周期
@@ -46,6 +51,7 @@ class UserListViewController: UIViewController {
         title = "用户列表"
 
         setupTableView()    // 搭表格
+        setupBottomBar()    // 底部下载按钮
         setupNavBar()       // 右上角 + 按钮
 
         fetchUsers()        // 拉取数据
@@ -59,9 +65,29 @@ class UserListViewController: UIViewController {
         tableView.register(UserCell.self, forCellReuseIdentifier: UserCell.identifier)
 
         view.addSubview(tableView)
-        // 设 SnapKit 约束铺满全屏（类似 OC 的 make.edges.equalTo(self.view)）
+        // 表格：顶部/左右贴边，底部接下载按钮上方（留 10pt 间距）
+        // （bottom 约束写到 setupBottomBar 下面，因为要先有 downloadButton 才能引用）
         tableView.snp.makeConstraints { make in
-            make.edges.equalTo(view)   // 上下左右都等于 view → 铺满
+            make.top.equalTo(view)
+            make.left.equalTo(view)
+            make.right.equalTo(view)
+            make.bottom.equalTo(downloadButton.snp.top).offset(-10)
+        }
+    }
+
+    // ─── 底部下载按钮（对应 OC 的 setupBottomBar）───
+    private func setupBottomBar() {
+        downloadButton.setTitle("下载文件", for: .normal)         // 标题（对应 OC setTitle:forState:）
+        downloadButton.backgroundColor = .systemBlue             // 背景色（对应 OC backgroundColor）
+        downloadButton.setTitleColor(.white, for: .normal)       // 标题白色
+        downloadButton.addTarget(self, action: #selector(downloadButtonTapped), for: .touchUpInside)
+
+        view.addSubview(downloadButton)
+        downloadButton.snp.makeConstraints { make in
+            make.left.equalTo(view).offset(16)          // 左右留 16pt
+            make.right.equalTo(view).offset(-16)
+            make.bottom.equalTo(view).offset(-20)       // 底部留 20pt（避开安全区/safeArea）
+            make.height.equalTo(44)
         }
     }
 
@@ -100,13 +126,13 @@ class UserListViewController: UIViewController {
         // 姓名输入框：新增显示占位，编辑预填当前名字
         alert.addTextField { tf in
             tf.placeholder = "姓名"
-            if let u = user { tf.text = u.name }   // 编辑：预填名字
+            tf.text = user?.name            // 编辑：预填名字（nil=新增不填，不崩）
         }
         // 年龄输入框：新增显示占位，编辑预填当前年龄
         alert.addTextField { tf in
             tf.placeholder = "年龄"
             tf.keyboardType = .numberPad
-            if let u = user { tf.text = u.age }    // 编辑：预填年龄
+            tf.text = user?.age             // 编辑：预填年龄（nil=新增不填，不崩）
         }
 
         // 取消
@@ -132,6 +158,28 @@ class UserListViewController: UIViewController {
         })
 
         present(alert, animated: true)
+    }
+
+    // ════════════════════════════════════════════════════════
+    // 下载 —— 底部按钮触发（对应 OC 的 downloadButtonTapped）
+    // ════════════════════════════════════════════════════════
+    @objc private func downloadButtonTapped() {
+        // 下载文件名/地址（和 OC 简易版同一个思路，用时间戳文件名）
+        let urlString = "http://10.17.66.196:8086/download/test.txt"
+
+        NetworkManager.shared.downloadFile(
+            from: urlString,
+            progress: { p in
+                // 进度回调（已切主线程）→ 控制台打印
+                print("[下载进度] \(Int(p * 100))%")
+            },
+            completion: { success, filePath, error in
+                if success {
+                    print("[下载完成] 文件路径：\(filePath ?? "")")
+                } else {
+                    print("[下载失败] \(error?.localizedDescription ?? "未知错误")")
+                }
+            })
     }
 }
 
@@ -193,12 +241,14 @@ extension UserListViewController: UITableViewDelegate {
 UserListViewController.swift
 │
 ├─① class UserListViewController
-│     ├─ 属性（users、tableView）
+│     ├─ 属性（users、tableView、downloadButton）
 │     ├─ viewDidLoad（入口）
 │     ├─ setupTableView（搭表格+dataSource赋值）
+│     ├─ setupBottomBar（底部下载按钮）
 │     ├─ setupNavBar（+按钮）
 │     ├─ fetchUsers（拉数据）
-│     └─ showEditAlert（新增/编辑共用弹窗）
+│     ├─ showEditAlert（新增/编辑共用弹窗）
+│     └─ downloadButtonTapped（下载按钮触发）
 │
 ├─② extension ... UITableViewDataSource
 │     ├─ numberOfRowsInSection（几行）
@@ -224,6 +274,10 @@ UserListViewController.swift
 | `UIAlertController` | `UIAlertController` | 弹窗 |
 | `UIContextualAction` | `UIContextualAction` | 左滑按钮 |
 | `completion(true)` | `completionHandler(YES)` | 关左滑 |
+| `downloadButton.setTitle(_,for: .normal)` | `setTitle:forState:` | 按钮文字 |
+| `addTarget(_, #selector, for: .touchUpInside)` | `addTarget:action:` | 按钮点击 |
+| `downloadFile(from:progress:completion:)` | `downloadFileFromURL:progress:completion:` | 下载（进度+完成回调） |
+| `print("[下载进度]...")` | `NSLog(@"...")` | 控制台打印进度 |
 
 ---
 
@@ -245,4 +299,6 @@ User  +  NetworkManager  +  UserCell  +  UserListViewController
 (01)      (02)               (03)          (04)
 ```
 
-把 UserCell、UserListViewController 都建好后运行，列表 + 增删改查就通了。敲的过程中有问题随时贴给我。
+把 UserCell、UserListViewController 都建好后运行，列表 + 增删改查 + 下载就通了。敲的过程中有问题随时贴给我。
+
+> **下载说明**：点底部"下载文件"按钮 → 调 `NetworkManager.shared.downloadFile(from:progress:completion:)` → 控制台 `print` 打印进度和结果（和 OC 简易版用 NSLog 一样）。下载的 URL 现在写死成 `.../download/test.txt`，你可改成实际要下的文件地址。

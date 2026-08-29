@@ -662,3 +662,226 @@ alert.addTextField { tf in
 ---
 
 **已更新：Swift vs OC 网络编程程序语法对比（含 08-28 补充的 init/参数命名、类型推断、let/var、weak/可选链、下划线、预填）。**
+
+---
+
+## 十、下载功能对照（2026-08-29 补充）
+
+> Swift 版补全下载功能后整理。下载和增删改查不同：① 进度要反复回调 ② 文件要到沙盒 ③ 原生要 delegate、Alamofire 不用。
+
+### 10.1 下载的两类回调（对应 OC 两个 typedef）
+
+先看 OC：
+```objc
+typedef void (^DownloadProgressBlock)(double progress);              // 进度 0.0~1.0
+typedef void (^DownloadCompletionBlock)(BOOL success, NSString *filePath, NSError *error); // 完成
+```
+
+Swift：
+```swift
+typealias DownloadProgressBlock = (_ progress: Double) -> Void
+typealias DownloadCompletionBlock = (_ success: Bool, _ filePath: String?, _ error: Error?) -> Void
+```
+
+**下载方法签名对应**：
+| OC | Swift |
+|----|-------|
+| `downloadFileFromURL:progress:completion:` | `downloadFile(from:progress:completion:)` |
+
+### 10.2 原生下载（URLSession）—— 必须 delegate
+
+**增删改查**用闭包（`URLSession.shared.dataTask`），**下载**要拿进度 + 移动临时文件，靠 **delegate 三个方法**。所以 NetworkManager 要改造：
+
+```swift
+class NetworkManager: NSObject, URLSessionDownloadDelegate {
+    // NSObject                  → delegate 方法要求的基类
+    // URLSessionDownloadDelegate → 下载三方法的协议
+}
+```
+对应 OC：`@interface NetworkManager () <NSURLSessionDownloadDelegate>`
+
+**专属下载会话**（对应 OC 单独建的 downloadSession）：
+```swift
+private lazy var downloadSession: URLSession = {
+    let config = URLSessionConfiguration.default
+    return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+}()
+```
+
+**发起下载**：
+```swift
+let task = downloadSession.downloadTask(with: url)   // 对应 OC downloadTaskWithURL:
+task.resume()                                        // 原生不自动 resume
+```
+
+**三个 delegate 方法对照**：
+
+| OC | Swift | 时机 |
+|----|-------|------|
+| `URLSession:downloadTask:didWriteData:...` | `urlSession(_:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite:)` | 下载中反复调（进度） |
+| `URLSession:downloadTask:didFinishDownloadingToURL:` | `urlSession(_:downloadTask:didFinishDownloadingTo:)` | 下载完，文件到临时目录 |
+| `URLSession:task:didCompleteWithError:` | `urlSession(_:task:didCompleteWithError:)` | 结束（成败都调） |
+
+**进度计算**：`Double(已写)/Double(总)` → 0.0~1.0（OC 一样）。
+**完成后移文件**（对应 OC `NSFileManager moveItemAtURL:`）：
+```swift
+let fm = FileManager.default
+try fm.moveItem(at: tempURL, to: URL(fileURLWithPath: destPath))
+```
+> 关键：delegate 方法在子线程调，回调用户 Block 时要用 `DispatchQueue.main.async` 切主线程（和增删改查一样）。
+
+### 10.3 Alamofire 下载 —— 不用 delegate，最省事
+
+第三方库把 delegate 那套封装掉了，进度/完成都用闭包：
+
+```swift
+AF.download(urlString)
+    .downloadProgress { downloadProgress in
+        let p = downloadProgress.fractionCompleted   // 0.0~1.0，Alamofire 算好
+        progress?(p)
+    }
+    .response { response in
+        // 完成：response.error / response.fileURL（临时路径）
+    }
+```
+
+**和 OC AFNetworking 下载对应**：
+| OC AFN 下载 | Swift Alamofire | 作用 |
+|------------|----------------|------|
+| `downloadTaskWithRequest:` | `AF.download(url)` | 发起下载 |
+| `progress:` Block | `.downloadProgress {}` | 进度（闭包直接给，不用 delegate） |
+| `destination:` + `completionHandler:` | `.response {}` | 完成 + 保存路径 |
+
+**进度**：`downloadProgress.fractionCompleted`（0.0~1.0），原生版要自己算，Alamofire 给你算好了。
+
+### 10.4 原生 vs Alamofire 下载对比
+
+| 项 | 原生（URLSessionDownloadTask） | Alamofire（AF.download） |
+|----|------------------------------|------------------------|
+| delegate | 必须（3 个方法） | 不用 |
+| 进度 | `didWriteData` delegate 里自己算 | `.downloadProgress` 闭包 + `fractionCompleted` |
+| 完成 | `didFinishDownloadingTo` + 手动移动 | `.response` + 手动移动 |
+| 切主线程 | delegate 里手动 `DispatchQueue.main.async` | 自动主线程 |
+| 调用接口 | `downloadFile(from:progress:completion:)` | **完全一样** |
+
+**核心规律**：和增删改查一样，**Alamofire 下载也把"delegate + 手动算进度 + 切线程"封装掉了**，只剩"业务逻辑 + 移文件"。调用方两种版本零改动。
+
+### 10.5 主界面下载按钮（对应 OC 简易版）
+
+**UIButton**（SnapKit 布局，对应 OC Masonry）：
+```swift
+private let downloadButton = UIButton(type: .system)
+downloadButton.setTitle("下载文件", for: .normal)       // 对应 OC setTitle:forState:
+downloadButton.backgroundColor = .systemBlue
+downloadButton.setTitleColor(.white, for: .normal)
+downloadButton.addTarget(self, action: #selector(downloadButtonTapped), for: .touchUpInside)
+```
+
+**点击 → 下载**（对应 OC downloadButtonTapped）：
+```swift
+@objc private func downloadButtonTapped() {
+    NetworkManager.shared.downloadFile(
+        from: urlString,
+        progress: { p in print("[下载进度] \(Int(p * 100))%") },   // 对应 OC NSLog
+        completion: { success, filePath, error in ... })
+}
+```
+> `#selector` = OC 的 `@selector`；`print(...)`（含字符串插值）= OC 的 `NSLog(@"...")`。
+
+**表格给按钮留空间**（对应 OC 底部接 downloadButton 上方）：
+```swift
+tableView.snp.makeConstraints { make in
+    make.bottom.equalTo(downloadButton.snp.top).offset(-10)
+}
+```
+
+---
+
+**已更新：Swift vs OC 网络编程程序语法对比（含 10 下载功能对照 —— 原生 delegate 下载 / Alamofire 下载 / 主界面下载按钮）。**
+
+---
+
+## 十一、踩坑与深入（2026-08-29 补充）
+
+> 今天实测踩到的坑 + 讲解。三个都是 Swift 常见的"看着对但出问题"的点。
+
+### 11.1 闭包参数流向：completion(false, nil, error) 的 error 传给谁？
+
+**问题**：看着调用方的闭包没处理 error，以为 error 丢了。
+
+```swift
+// NetworkManager 里（提供方）：
+completion(false, nil, error)   // 三个值：success / result / error
+
+// 调用方（消费方）：
+NetworkManager.shared.fetchUsers { success, result, _ in   // ← 第3个参数 _ 就是 error，被忽略了
+    if success { ... }
+}
+```
+
+**关键**：`error` 确实通过闭包第 3 个参数传给了调用方，只是调用方用了 `_` 把第 3 个参数忽略掉了。
+
+**想用 error**：把 `_` 改成名字 `error` 就能拿到：
+```swift
+fetchUsers { success, result, error in
+    if success { ... } else {
+        print("失败：\(error?.localizedDescription ?? "")")
+    }
+}
+```
+
+**设计原则**：网络层"多传信息"（能带的都带），消费方"按需取"（用就取名，不用就 `_`）。和 OC 的 `NetworkCompletionBlock` 带 error 但你常用不用一个道理。
+
+### 11.2 URL 带中文报错 → 用 URLComponents 编码
+
+**坑**：update 接口把 name 拼进 URL，name 是中文（"张三"）时编辑失败/匹配不到。
+
+```swift
+// ❌ 错误：手动拼 URL，中文 name 没编码
+let url = "\(baseURL)/user/update?id=\(id)&name=\(name)&age=\(age)"
+
+// ✅ 正确：URLComponents 自动做百分号编码
+var comps = URLComponents(string: baseURL + "/user/update")!
+comps.queryItems = [
+    URLQueryItem(name: "id", value: id),
+    URLQueryItem(name: "name", value: name),   // "张三" → %E5%BC%A0%E4%B8%89
+    URLQueryItem(name: "age", value: age)
+]
+let url = comps.url
+```
+
+**为什么其他接口没事**：
+- **新增（POST /save）**：参数在 **body（JSON）**，JSON 内部 UTF-8，天然支持中文，不用编码
+- **删除（delete）**：只传 `id`（数字），无中文
+- **编辑（update）**：参数在 **URL** 且含中文 name → 必须编码 ← 出问题
+
+**规律**：「参数放 URL + 可能是中文」的地方，一律用 URLComponents，别手动拼。
+
+**Alamofire 版不用改**：`URLEncoding.queryString` 会自动对 parameters 里的中文编码，天然正确。
+
+### 11.3 弹窗预填 `user?.age`（可选链）vs `if let`
+
+**问题**：编辑弹窗预填当前值，怎么写最稳。
+
+```swift
+// ❌ 无保护：user 为 nil（新增）时崩溃
+tf.text = user.age
+
+// ✅ 可选链：user 有值才预填，nil 不填且不崩 —— 推荐
+tf.text = user?.age
+
+// ✅ 或 if let（功能一样，更啰嗦）
+if let u = user { tf.text = u.age }
+```
+
+**`user?.age` 的语义**：
+- user 有值（编辑）→ `user?.age` 取到年龄 → 预填
+- user 是 nil（新增）→ `user?.age` 整个是 nil → `tf.text = nil`（不填，不崩）
+
+**对照**：`if let u = user` 只是把解包后的 user 起了个别名 `u`，用 `u.age`；`user?.age` 一行等价。**可选链 `?` 更简洁**（对应你 OC 的 `if (user) { tf.text = user.age; }`）。
+
+**适用场景**：`showEditAlert(title:user:)` 里 user 可能 nil（新增）也可能有值（编辑），两种入口共用方法，用 `user?.xxx` 安全处理。
+
+---
+
+**补充完成：Swift vs OC —— 闭包参数流向（_ 忽略 error）/ URL 中文编码（URLComponents）/ 弹窗可选链预填（user?.age）。**
